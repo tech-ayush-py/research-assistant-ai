@@ -30,7 +30,25 @@ except Exception:
 import plotly.graph_objects as go
 import pandas as pd
 
-from config.settings import GRANT_AGENCIES, CITATION_STYLES, validate_api_keys
+from config.settings import GRANT_AGENCIES, CITATION_STYLES
+try:
+    from config.settings import validate_api_keys
+except ImportError:
+    # Fallback for environments where settings.py has not yet been updated.
+    # Checks only the active LLM_PROVIDER key so the pipeline still validates correctly.
+    import os as _os
+    def validate_api_keys() -> list:
+        _key_map = {
+            "gemini":    "GEMINI_API_KEY",
+            "openai":    "OPENAI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+        }
+        provider = _os.getenv("LLM_PROVIDER", "gemini")
+        env_var  = _key_map.get(provider)
+        if env_var and not _os.getenv(env_var, "").strip():
+            return [f"{env_var} is not set. Add it to your Streamlit secrets or .env file."]
+        return []
+
 from core.orchestrator import ResearchOrchestrator, ResearchRequest
 from core.vector_store import collection_stats
 from utils.export import export_proposal_pdf, export_proposal_docx, export_report_markdown
