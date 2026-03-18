@@ -1,6 +1,7 @@
 """
-AI-Powered Academic Research Assistant & Grant Proposal Generator
-Professional UI — refined academic luxury aesthetic
+ResearchAI — Academic Research Intelligence Platform
+Light theme · Blue accents · High contrast · Simplified
+API key hidden from UI (loaded from Streamlit secrets / .env only)
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
@@ -8,6 +9,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import logging
 import streamlit as st
 
+# Load secrets into env (Streamlit Cloud deployment)
 try:
     for key in ["GEMINI_API_KEY", "LLM_PROVIDER", "LLM_MODEL"]:
         if key in st.secrets and not os.getenv(key):
@@ -18,7 +20,7 @@ except Exception:
 import plotly.graph_objects as go
 import pandas as pd
 
-from config.settings import APP_TITLE, GRANT_AGENCIES, CITATION_STYLES
+from config.settings import GRANT_AGENCIES, CITATION_STYLES
 from core.orchestrator import ResearchOrchestrator, ResearchRequest
 from core.vector_store import collection_stats
 from utils.export import export_proposal_pdf, export_proposal_docx, export_report_markdown
@@ -27,581 +29,359 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 st.set_page_config(
-    page_title="ResearchAI — Academic Intelligence Platform",
+    page_title="ResearchAI",
     page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ── Professional CSS — refined academic luxury ─────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 :root {
-    --bg-deep:    #f7f5f0;
-    --bg-surface: #ffffff;
-    --bg-raised:  #fafaf8;
-    --bg-card:    #ffffff;
-    --border:     rgba(0,0,0,0.08);
-    --border-mid: rgba(0,0,0,0.13);
-    --gold:       #a07830;
-    --gold-light: #c49a4a;
-    --gold-dim:   rgba(160,120,48,0.10);
-    --teal:       #0e7c76;
-    --teal-dim:   rgba(14,124,118,0.10);
-    --slate:      #6b7280;
-    --text:       #1a1a2e;
-    --text-dim:   #6b7280;
-    --red:        #c0392b;
-    --green:      #1a7a4a;
+    --bg:        #f4f6f9;
+    --surface:   #ffffff;
+    --border:    #d1d9e0;
+    --blue:      #1a56db;
+    --blue-dark: #1240a8;
+    --blue-dim:  #e8eefb;
+    --text:      #111827;
+    --muted:     #374151;
+    --subtle:    #6b7280;
+    --green:     #166534;
+    --red:       #991b1b;
 }
 
+/* ── Base ── */
 html, body, [data-testid="stAppViewContainer"] {
-    background: var(--bg-deep) !important;
+    background: var(--bg) !important;
     font-family: 'IBM Plex Sans', sans-serif;
     color: var(--text);
-    min-height: 100vh;
 }
+[data-testid="stHeader"]     { background: transparent !important; }
+[data-testid="stDecoration"] { display: none; }
+footer, #MainMenu            { display: none; }
+.block-container { padding: 1.8rem 2.2rem 3rem !important; max-width: 1300px !important; }
 
-/* Remove default streamlit chrome */
-[data-testid="stHeader"]          { background: transparent !important; }
-[data-testid="stDecoration"]      { display: none; }
-footer                            { display: none; }
-#MainMenu                         { display: none; }
-
-/* ── SIDEBAR ── */
+/* ── Sidebar ── */
 [data-testid="stSidebar"] {
-    background: #ffffff !important;
+    background: var(--surface) !important;
     border-right: 1px solid var(--border) !important;
-    padding-top: 0 !important;
-    box-shadow: 2px 0 12px rgba(0,0,0,0.05) !important;
+    box-shadow: 1px 0 8px rgba(0,0,0,0.06) !important;
 }
-[data-testid="stSidebar"] > div:first-child { padding-top: 0 !important; }
 [data-testid="stSidebar"] * { color: var(--text) !important; }
-
+[data-testid="stSidebar"] label {
+    font-size: .7rem !important; font-weight: 600 !important;
+    letter-spacing: .08em !important; text-transform: uppercase !important;
+    color: var(--subtle) !important;
+}
 [data-testid="stSidebar"] .stTextInput input,
 [data-testid="stSidebar"] .stTextArea textarea,
 [data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] > div {
-    background: #fafaf8 !important;
-    border: 1px solid rgba(0,0,0,0.15) !important;
+    background: var(--bg) !important;
+    border: 1px solid var(--border) !important;
     border-radius: 6px !important;
     color: var(--text) !important;
-    font-family: 'IBM Plex Sans', sans-serif !important;
-    font-size: .84rem !important;
-    transition: border-color .2s !important;
+    font-size: .85rem !important;
 }
 [data-testid="stSidebar"] .stTextInput input:focus,
 [data-testid="stSidebar"] .stTextArea textarea:focus {
-    border-color: var(--gold) !important;
-    box-shadow: 0 0 0 2px var(--gold-dim) !important;
+    border-color: var(--blue) !important;
+    box-shadow: 0 0 0 3px rgba(26,86,219,0.12) !important;
 }
-[data-testid="stSidebar"] label {
-    font-size: .72rem !important;
-    font-weight: 600 !important;
-    letter-spacing: .09em !important;
-    text-transform: uppercase !important;
-    color: var(--slate) !important;
-}
-[data-testid="stSidebar"] .stSlider [data-testid="stTickBarMin"],
-[data-testid="stSidebar"] .stSlider [data-testid="stTickBarMax"] {
-    font-size: .7rem !important; color: var(--text-dim) !important;
-}
-
-/* Run button */
 [data-testid="stSidebar"] .stButton > button {
-    background: var(--gold) !important;
+    background: var(--blue) !important;
     color: #ffffff !important;
-    border: none !important;
-    border-radius: 6px !important;
-    font-family: 'IBM Plex Sans', sans-serif !important;
-    font-size: .84rem !important;
-    font-weight: 600 !important;
-    letter-spacing: .04em !important;
-    padding: .7rem 1rem !important;
-    width: 100% !important;
-    transition: background .2s, transform .15s, box-shadow .2s !important;
-    box-shadow: 0 2px 10px rgba(160,120,48,0.25) !important;
+    border: none !important; border-radius: 6px !important;
+    font-size: .88rem !important; font-weight: 600 !important;
+    padding: .72rem 1rem !important; width: 100% !important;
+    transition: background .15s, box-shadow .15s !important;
+    box-shadow: 0 2px 8px rgba(26,86,219,0.3) !important;
 }
 [data-testid="stSidebar"] .stButton > button:hover {
-    background: var(--gold-light) !important;
-    transform: translateY(-1px) !important;
-    box-shadow: 0 5px 18px rgba(160,120,48,0.35) !important;
+    background: var(--blue-dark) !important;
+    box-shadow: 0 4px 14px rgba(26,86,219,0.4) !important;
 }
 
-/* ── MAIN AREA ── */
-.block-container {
-    padding: 2rem 2.5rem 3rem !important;
-    max-width: 1400px !important;
-}
+/* ── Page header ── */
+.page-header { padding: 1.6rem 0 1rem; border-bottom: 2px solid var(--blue); margin-bottom: 1.6rem; }
+.page-title  { font-family: 'Playfair Display', serif; font-size: 2rem;
+               font-weight: 700; color: var(--text); margin: 0 0 .25rem; }
+.page-sub    { font-size: .85rem; color: var(--muted); }
+.page-pills  { display: flex; gap: 8px; margin-top: .9rem; flex-wrap: wrap; }
+.page-pill   { font-size: .67rem; font-weight: 600; letter-spacing: .09em;
+               text-transform: uppercase; color: var(--blue);
+               background: var(--blue-dim); border: 1px solid #c3d3f5;
+               padding: 3px 10px; border-radius: 3px; }
 
-/* ── WORDMARK HEADER ── */
-.wordmark {
-    display: flex;
-    align-items: baseline;
-    gap: 14px;
-    margin-bottom: .3rem;
-}
-.wordmark-primary {
-    font-family: 'Playfair Display', serif;
-    font-size: 2.1rem;
-    font-weight: 700;
-    color: var(--text);
-    letter-spacing: -.02em;
-    line-height: 1;
-}
-.wordmark-tag {
-    font-size: .7rem;
-    font-weight: 600;
-    letter-spacing: .14em;
-    text-transform: uppercase;
-    color: var(--gold);
-    border: 1px solid var(--gold);
-    padding: 3px 9px;
-    border-radius: 3px;
-    margin-left: 2px;
-}
-.header-rule {
-    height: 1px;
-    background: linear-gradient(90deg, var(--gold), rgba(160,120,48,0.0));
-    margin: 1.1rem 0 1.5rem;
-}
-.header-sub {
-    font-size: .84rem;
-    color: var(--slate);
-    font-weight: 300;
-    letter-spacing: .01em;
-}
-.header-pills {
-    display: flex; gap: 8px; margin-top: 1rem; flex-wrap: wrap;
-}
-.header-pill {
-    font-size: .68rem;
-    font-weight: 600;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    color: #6b7280;
-    border: 1px solid rgba(0,0,0,0.13);
-    padding: 3px 11px;
-    border-radius: 2px;
-}
-
-/* ── STAT CARDS ── */
-.stat-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 24px; }
+/* ── Stat cards ── */
+.stat-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px; }
 .stat-card {
-    background: #ffffff;
-    border: 1px solid rgba(0,0,0,0.08);
-    border-top: 2px solid var(--gold);
-    border-radius: 8px;
-    padding: 1.1rem 1.3rem;
-    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
-    transition: border-top-color .2s, box-shadow .2s;
+    background: var(--surface); border: 1px solid var(--border);
+    border-top: 3px solid var(--blue); border-radius: 6px;
+    padding: 1rem 1.2rem; box-shadow: 0 1px 4px rgba(0,0,0,0.05);
 }
-.stat-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.10); border-top-width: 3px; }
-.stat-card.teal  { border-top-color: var(--teal); }
-.stat-card.green { border-top-color: var(--green); }
-.stat-card.slate { border-top-color: var(--slate); }
-.stat-label { font-size: .65rem; font-weight: 700; letter-spacing: .12em;
-              text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; }
-.stat-value { font-family: 'Playfair Display', serif; font-size: 2.1rem;
+.stat-card.green { border-top-color: #166534; }
+.stat-card.slate { border-top-color: #6b7280; }
+.stat-card.teal  { border-top-color: #0e7490; }
+.stat-label { font-size: .65rem; font-weight: 700; letter-spacing: .1em;
+              text-transform: uppercase; color: var(--subtle); margin-bottom: 5px; }
+.stat-value { font-family: 'Playfair Display', serif; font-size: 2rem;
               font-weight: 700; color: var(--text); line-height: 1; }
-.stat-delta { font-size: .72rem; color: var(--teal); margin-top: 5px; font-weight: 500; }
+.stat-delta { font-size: .72rem; color: var(--blue); margin-top: 4px; font-weight: 500; }
 
-/* ── DATA CARD ── */
+/* ── Data card ── */
 .data-card {
-    background: #ffffff;
-    border: 1px solid rgba(0,0,0,0.08);
-    border-radius: 8px;
-    padding: 1.3rem 1.5rem;
-    margin-bottom: 16px;
-    box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 1.2rem 1.4rem; margin-bottom: 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
 }
-.card-heading {
-    font-family: 'Playfair Display', serif;
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 4px;
-}
-.card-sub {
-    font-size: .75rem;
-    color: var(--text-dim);
-    margin-bottom: 14px;
-    line-height: 1.5;
-}
+.card-title { font-family: 'Playfair Display', serif; font-size: .95rem;
+              font-weight: 700; color: var(--text); margin-bottom: 3px; }
 
-/* ── SECTION LABEL ── */
-.sec-label {
-    font-size: .65rem;
-    font-weight: 700;
-    letter-spacing: .13em;
-    text-transform: uppercase;
-    color: var(--gold);
-    margin-bottom: 10px;
-    display: block;
-}
+/* ── Section label ── */
+.sec-label { font-size: .65rem; font-weight: 700; letter-spacing: .12em;
+             text-transform: uppercase; color: var(--blue);
+             display: block; margin-bottom: 10px; }
 
-/* ── CONFIDENCE BAR ── */
-.conf-row {
-    margin: 6px 0 12px;
-}
-.conf-header {
-    display: flex; justify-content: space-between; align-items: center;
-    font-size: .72rem; color: var(--slate); margin-bottom: 5px;
-}
-.conf-name  { font-weight: 500; color: #374151; }
-.conf-pct   { font-family: 'IBM Plex Mono', monospace; }
-.conf-track { height: 4px; background: rgba(0,0,0,0.08); border-radius: 2px; overflow: hidden; }
-.conf-fill  { height: 100%; border-radius: 2px; transition: width 1.2s cubic-bezier(.4,0,.2,1); }
+/* ── Confidence bar ── */
+.conf-row { margin: 5px 0 11px; }
+.conf-header { display: flex; justify-content: space-between;
+               font-size: .72rem; margin-bottom: 4px; }
+.conf-name { font-weight: 600; color: var(--text); }
+.conf-pct  { font-family: 'IBM Plex Mono', monospace; font-weight: 500; }
+.conf-track { height: 5px; background: #e5e7eb; border-radius: 3px; overflow: hidden; }
+.conf-fill  { height: 100%; border-radius: 3px; transition: width 1s ease; }
 
-/* ── GAP ITEM ── */
+/* ── Gap item ── */
 .gap-item {
-    border-left: 3px solid var(--gold);
-    background: linear-gradient(90deg, rgba(160,120,48,0.06), rgba(160,120,48,0.01));
+    border-left: 3px solid var(--blue);
+    background: var(--blue-dim);
     border-radius: 0 6px 6px 0;
-    padding: .8rem 1.1rem;
-    margin: .55rem 0;
-    font-size: .83rem;
-    color: #1e293b;
-    line-height: 1.65;
+    padding: .75rem 1rem; margin: .5rem 0;
+    font-size: .84rem; color: var(--text); line-height: 1.65;
 }
-.gap-num {
-    font-size: .62rem; font-weight: 700; letter-spacing: .12em;
-    text-transform: uppercase; color: var(--gold); margin-bottom: 5px;
-}
+.gap-num { font-size: .62rem; font-weight: 700; letter-spacing: .1em;
+           text-transform: uppercase; color: var(--blue); margin-bottom: 4px; }
 
-/* ── PILL TAGS ── */
-.pill {
-    display: inline-block;
-    font-size: .72rem; font-weight: 500;
-    padding: 4px 12px; border-radius: 3px; margin: 3px;
-    letter-spacing: .02em;
-}
-.pill-gold  { background: var(--gold-dim); color: var(--gold-light); border: 1px solid rgba(201,168,76,0.3); }
-.pill-teal  { background: var(--teal-dim); color: var(--teal);       border: 1px solid rgba(79,209,197,0.3); }
-.pill-slate { background: rgba(100,116,139,0.08); color: #475569; border: 1px solid rgba(100,116,139,0.25); }
-.pill-red   { background: rgba(192,57,43,0.08);  color: #9b2335; border: 1px solid rgba(192,57,43,0.2); }
+/* ── Pills ── */
+.pill { display: inline-block; font-size: .73rem; font-weight: 500;
+        padding: 4px 11px; border-radius: 3px; margin: 3px; }
+.pill-blue  { background: var(--blue-dim); color: var(--blue-dark);
+              border: 1px solid #c3d3f5; }
+.pill-green { background: #dcfce7; color: #14532d; border: 1px solid #bbf7d0; }
+.pill-slate { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+.pill-red   { background: #fee2e2; color: #7f1d1d; border: 1px solid #fecaca; }
 
-/* ── STEP LOG ── */
-.step-row {
-    display: flex; align-items: flex-start; gap: 10px;
-    padding: 7px 0; border-bottom: 1px solid rgba(0,0,0,0.07);
-    font-size: .8rem;
-}
+/* ── Step log ── */
+.step-row { display: flex; align-items: flex-start; gap: 10px;
+            padding: 6px 0; border-bottom: 1px solid var(--border);
+            font-size: .8rem; }
 .step-row:last-child { border-bottom: none; }
-.step-dot {
-    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 5px;
-}
-.dot-done    { background: #1a7a4a; }
-.dot-running { background: #a07830; }
-.dot-wait    { background: var(--text-dim); opacity: .35; }
-.step-text-done    { color: #1a1a2e; }
-.step-text-running { color: #a07830; }
+.step-dot { width: 7px; height: 7px; border-radius: 50%;
+            flex-shrink: 0; margin-top: 5px; }
+.dot-done    { background: #166534; }
+.dot-running { background: var(--blue); }
+.dot-wait    { background: #d1d5db; }
+.step-text-done    { color: var(--text); }
+.step-text-running { color: var(--blue); font-weight: 600; }
 .step-text-wait    { color: #9ca3af; }
 
-/* ── HYPOTHESIS BLOCK ── */
+/* ── Hypothesis ── */
 .hypothesis {
-    border-left: 3px solid var(--teal);
-    background: rgba(14,124,118,0.06);
-    border-radius: 0 6px 6px 0;
-    padding: 1rem 1.2rem;
-    font-size: .87rem;
-    line-height: 1.7;
-    color: var(--text);
-    margin-bottom: 18px;
-    font-style: italic;
+    border-left: 3px solid var(--blue); background: var(--blue-dim);
+    border-radius: 0 6px 6px 0; padding: .9rem 1.1rem;
+    font-size: .87rem; line-height: 1.75; color: var(--text);
+    margin-bottom: 16px; font-style: italic;
 }
 
-/* ── APPROACH STEP ── */
-.approach-step {
-    display: flex; gap: 12px; align-items: flex-start;
-    padding: .7rem 0; border-bottom: 1px solid rgba(0,0,0,0.07);
-    font-size: .83rem; line-height: 1.6; color: var(--text);
-}
+/* ── Approach step ── */
+.approach-step { display: flex; gap: 12px; align-items: flex-start;
+                 padding: .65rem 0; border-bottom: 1px solid var(--border);
+                 font-size: .83rem; line-height: 1.6; color: var(--text); }
 .approach-step:last-child { border-bottom: none; }
-.step-num {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: .72rem; font-weight: 500;
-    color: var(--gold); flex-shrink: 0;
-    min-width: 24px; padding-top: 2px;
-}
+.step-num { font-family: 'IBM Plex Mono', monospace; font-size: .72rem;
+            font-weight: 600; color: var(--blue); min-width: 24px; padding-top: 2px; }
 
-/* ── GRANT SECTION ── */
-.grant-meta-row {
-    display: flex; gap: 32px; padding: 1rem 0;
-    border-bottom: 1px solid rgba(0,0,0,0.08); margin-bottom: 20px;
-}
-.grant-meta-item { font-size: .8rem; }
-.grant-meta-label {
-    font-size: .63rem; font-weight: 700; letter-spacing: .1em;
-    text-transform: uppercase; color: var(--text-dim); margin-bottom: 3px;
-}
-.grant-meta-val { font-weight: 600; color: #fff; }
+/* ── Grant meta ── */
+.grant-meta-row { display: flex; gap: 28px; padding: .9rem 0;
+                  border-bottom: 1px solid var(--border); margin-bottom: 18px;
+                  flex-wrap: wrap; }
+.grant-meta-label { font-size: .62rem; font-weight: 700; letter-spacing: .1em;
+                    text-transform: uppercase; color: var(--subtle); margin-bottom: 3px; }
+.grant-meta-val   { font-weight: 600; font-size: .88rem; color: var(--text); }
 
-/* ── INFO BAR ── */
-.info-bar {
-    background: rgba(160,120,48,0.07);
-    border: 1px solid rgba(160,120,48,0.2);
-    border-radius: 6px;
-    padding: .75rem 1.1rem;
-    font-size: .82rem;
-    color: #7a5c20;
-    margin-bottom: 1.2rem;
-}
-.warn-bar {
-    background: rgba(192,57,43,0.06);
-    border: 1px solid rgba(192,57,43,0.18);
-    border-radius: 6px;
-    padding: .75rem 1.1rem;
-    font-size: .82rem;
-    color: #9b2335;
-    margin-bottom: 1.2rem;
-}
+/* ── Banners ── */
+.info-bar { background: var(--blue-dim); border: 1px solid #c3d3f5;
+            border-radius: 6px; padding: .7rem 1rem;
+            font-size: .82rem; color: #1240a8; margin-bottom: 1rem; }
+.warn-bar { background: #fee2e2; border: 1px solid #fca5a5;
+            border-radius: 6px; padding: .7rem 1rem;
+            font-size: .82rem; color: #7f1d1d; margin-bottom: 1rem; }
 
-/* ── TABS ── */
-[data-testid="stTabs"] {
-    border-bottom: 1px solid rgba(0,0,0,0.1) !important;
-}
+/* ── Tabs ── */
+[data-testid="stTabs"] { border-bottom: 1px solid var(--border) !important; }
 [data-testid="stTabs"] button {
-    font-family: 'IBM Plex Sans', sans-serif !important;
-    font-size: .8rem !important;
-    font-weight: 600 !important;
-    letter-spacing: .06em !important;
-    text-transform: uppercase !important;
-    color: rgba(0,0,0,0.4) !important;
-    padding: .75rem 1.1rem !important;
-    border-radius: 0 !important;
+    font-size: .78rem !important; font-weight: 600 !important;
+    letter-spacing: .07em !important; text-transform: uppercase !important;
+    color: var(--subtle) !important; padding: .7rem 1.1rem !important;
 }
 [data-testid="stTabs"] button[aria-selected="true"] {
-    color: var(--gold) !important;
-    border-bottom: 2px solid var(--gold) !important;
-}
-[data-testid="stTabs"] button:hover:not([aria-selected="true"]) {
-    color: var(--text) !important;
-    font-family: 'IBM Plex Sans', sans-serif !important;
+    color: var(--blue) !important;
+    border-bottom: 2px solid var(--blue) !important;
 }
 
-/* ── DATAFRAME ── */
-[data-testid="stDataFrame"] iframe { border-radius: 6px !important; }
+/* ── Progress bar ── */
+[data-testid="stProgressBar"] > div > div { background: var(--blue) !important; }
 
-/* ── PROGRESS BAR ── */
-[data-testid="stProgressBar"] > div > div {
-    background: var(--gold) !important;
-}
-
-
-/* ── CHAT ── */
-[data-testid="stChatMessage"] {
-    background: #ffffff !important;
-    border: 1px solid rgba(0,0,0,0.08) !important;
-    border-radius: 8px !important;
-}
-
-/* ── EXPANDER ── */
+/* ── Expander ── */
 [data-testid="stExpander"] {
-    background: #ffffff !important;
-    border: 1px solid rgba(0,0,0,0.08) !important;
-    border-radius: 6px !important;
-    margin-bottom: 6px !important;
+    background: var(--surface) !important; border: 1px solid var(--border) !important;
+    border-radius: 6px !important; margin-bottom: 6px !important;
 }
-[data-testid="stExpander"] summary {
-    font-weight: 600 !important;
-    font-size: .84rem !important;
-    color: var(--text) !important;
-}
+[data-testid="stExpander"] summary { font-weight: 600 !important;
+    font-size: .84rem !important; color: var(--text) !important; }
 
-/* ── DOWNLOAD BUTTON ── */
+/* ── Download button ── */
 [data-testid="stDownloadButton"] > button {
-    background: transparent !important;
-    border: 1px solid var(--gold) !important;
-    color: var(--gold) !important;
-    border-radius: 5px !important;
-    font-weight: 600 !important;
-    font-size: .8rem !important;
-    letter-spacing: .05em !important;
-    transition: background .2s, color .2s !important;
+    background: transparent !important; border: 1px solid var(--blue) !important;
+    color: var(--blue) !important; border-radius: 5px !important;
+    font-weight: 600 !important; font-size: .8rem !important;
 }
 [data-testid="stDownloadButton"] > button:hover {
-    background: var(--gold) !important;
-    color: #ffffff !important;
+    background: var(--blue) !important; color: #fff !important;
 }
 
-/* ── GENERAL ── */
-hr { border-color: rgba(0,0,0,0.08) !important; margin: 1.2rem 0 !important; }
-.stMarkdown p, .stMarkdown li { color: #374151 !important; font-size: .85rem !important; line-height: 1.7 !important; }
-h1,h2,h3,h4 {
-    font-family: 'Playfair Display', serif !important;
-    color: var(--text) !important;
-    font-weight: 600 !important;
-}
-[data-testid="stAlert"] {
-    background: #ffffff !important;
-    border: 1px solid rgba(0,0,0,0.1) !important;
+/* ── Chat ── */
+[data-testid="stChatMessage"] {
+    background: var(--surface) !important; border: 1px solid var(--border) !important;
     border-radius: 6px !important;
-    color: var(--text) !important;
 }
+
+/* ── General ── */
+hr { border-color: var(--border) !important; }
+.stMarkdown p, .stMarkdown li { color: var(--muted) !important; font-size: .85rem !important; line-height: 1.7 !important; }
+h1,h2,h3,h4 { font-family: 'Playfair Display', serif !important; color: var(--text) !important; }
+[data-testid="stAlert"] { background: var(--surface) !important;
+    border: 1px solid var(--border) !important; border-radius: 6px !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Wordmark Header ────────────────────────────────────────────
+# ── Session state ───────────────────────────────────────────────
+for k, v in [("report", None), ("pipeline_log", []), ("chat_history", [])]:
+    if k not in st.session_state:
+        st.session_state[k] = v
+
+# ── Page header ─────────────────────────────────────────────────
 st.markdown("""
-<div style="padding: 2rem 0 0">
-    <div class="wordmark">
-        <span class="wordmark-primary">ResearchAI</span>
-        <span class="wordmark-tag">Beta</span>
-    </div>
-    <div class="header-sub">
-        Academic Research Intelligence Platform &mdash; Literature Mining &middot; Gap Analysis &middot; Grant Generation
-    </div>
-    <div class="header-rule"></div>
-    <div class="header-pills">
-        <span class="header-pill">6 AI Agents</span>
-        <span class="header-pill">ArXiv + Semantic Scholar</span>
-        <span class="header-pill">ChromaDB RAG</span>
-        <span class="header-pill">NSF / NIH / DARPA / EU Horizon</span>
-        <span class="header-pill">Powered by Gemini</span>
+<div class="page-header">
+    <div class="page-title">ResearchAI</div>
+    <div class="page-sub">Academic Research Intelligence Platform</div>
+    <div class="page-pills">
+        <span class="page-pill">6 AI Agents</span>
+        <span class="page-pill">ArXiv + Semantic Scholar</span>
+        <span class="page-pill">ChromaDB RAG</span>
+        <span class="page-pill">NSF / NIH / DARPA / EU Horizon</span>
+        <span class="page-pill">Powered by Gemini</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# ── Session state ───────────────────────────────────────────────
-for key, default in [("report", None), ("pipeline_log", []), ("chat_history", [])]:
-    if key not in st.session_state:
-        st.session_state[key] = default
-
 # ═══════════════════════════════════════════════════════════════
-# SIDEBAR
+# SIDEBAR — research + grant settings only, no API fields
 # ═══════════════════════════════════════════════════════════════
 with st.sidebar:
     st.markdown(
-        "<div style='padding:1.4rem 1rem .8rem;"
-        "border-bottom:1px solid rgba(0,0,0,0.07);"
-        "margin-bottom:.8rem'>"
-        "<div style='font-family:Playfair Display,serif;font-size:1.1rem;"
-        "font-weight:600;color:var(--text)'>Configuration</div>"
-        "<div style='font-size:.72rem;color:#6b7280;margin-top:2px'>Set up your research pipeline</div>"
+        "<div style='padding:1.2rem 1rem .8rem;border-bottom:1px solid #e5e7eb'>"
+        "<div style='font-family:Playfair Display,serif;font-size:1.05rem;"
+        "font-weight:700;color:#111827'>Configuration</div>"
         "</div>",
         unsafe_allow_html=True,
     )
 
-    gemini_key = st.text_input(
-        "Gemini API Key",
-        type="password",
-        value=os.getenv("GEMINI_API_KEY", ""),
-        placeholder="AIzaSy…",
-        help="Free at aistudio.google.com — no credit card required.",
-    )
-    llm_model = st.selectbox(
-        "Model",
-        ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"],
-        help="Flash: fast, free-tier friendly. Pro: higher quality for grant writing.",
-    )
-    if gemini_key:
-        os.environ["GEMINI_API_KEY"] = gemini_key
-    os.environ["LLM_PROVIDER"] = "gemini"
-    os.environ["LLM_MODEL"]    = llm_model
-
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    st.divider()
-
+    # Research topic
     research_topic = st.text_area(
         "Research Topic",
-        placeholder="Describe your research in one or two sentences.\n\nExample: Federated Learning for Privacy-Preserving Medical Image Segmentation across Multi-Institutional Hospital Networks.",
-        height=110,
+        placeholder="Describe your research in one or two sentences.\n\nExample: Federated Learning for Privacy-Preserving Medical Image Segmentation.",
+        height=100,
     )
-    domain = st.selectbox(
-        "Domain",
-        ["General AI","NLP","Computer Vision","Biomedical","Graph / Network",
-         "Multimodal","Reinforcement Learning","Robotics","Security","Other"],
-        help="Helps the system recommend domain-appropriate datasets and baselines.",
-    )
+    domain = st.selectbox("Research Domain", [
+        "General AI", "NLP", "Computer Vision", "Biomedical",
+        "Graph / Network", "Multimodal", "Reinforcement Learning",
+        "Robotics", "Security", "Other",
+    ])
     max_papers = st.slider("Papers to retrieve", 10, 80, 25,
                            help="More papers improve analysis quality but increase runtime.")
 
     st.divider()
-    st.markdown("<div style='font-size:.65rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#6b7590;margin-bottom:10px'>Grant Proposal</div>", unsafe_allow_html=True)
 
-    grant_agency   = st.selectbox("Funding Agency", list(GRANT_AGENCIES.keys()),
-                                   help="Each agency has a unique section structure. The system auto-formats accordingly.")
+    # Grant settings
+    st.markdown(
+        "<div style='font-size:.65rem;font-weight:700;letter-spacing:.1em;"
+        "text-transform:uppercase;color:#6b7280;margin-bottom:10px'>Grant Proposal</div>",
+        unsafe_allow_html=True,
+    )
+    grant_agency   = st.selectbox("Funding Agency", list(GRANT_AGENCIES.keys()))
     pi_name        = st.text_input("Principal Investigator", "Dr. Jane Smith")
     institution    = st.text_input("Institution", "MIT")
     budget_total   = st.text_input("Total Budget", "$500,000")
     duration_years = st.number_input("Duration (years)", 1, 10, 3)
-    citation_style = st.selectbox("Citation Style", CITATION_STYLES,
-                                   help="IEEE / ACM for CS. APA for life sciences.")
+    citation_style = st.selectbox("Citation Style", CITATION_STYLES)
 
     st.divider()
     run_pipeline = st.button("Run Research Pipeline", type="primary", use_container_width=True)
 
     stats = collection_stats()
     st.markdown(
-        f"<div style='text-align:center;margin-top:12px;font-size:.7rem;color:#9ca3af;'>"
+        f"<div style='text-align:center;margin-top:10px;font-size:.72rem;color:#9ca3af'>"
         f"{stats['total_papers']} papers in corpus</div>",
         unsafe_allow_html=True,
     )
 
 # ═══════════════════════════════════════════════════════════════
-# PIPELINE EXECUTION
+# PIPELINE
 # ═══════════════════════════════════════════════════════════════
 AGENT_STEPS = [
-    ("literature",  "Literature Mining",     "Retrieving and indexing papers from ArXiv and Semantic Scholar"),
-    ("trends",      "Trend Analysis",        "Detecting how the research field has evolved over time"),
-    ("gaps",        "Gap Identification",    "Mapping under-explored intersections in the literature"),
-    ("methodology", "Methodology Design",    "Designing experiment, datasets, baselines, and metrics"),
-    ("grant",       "Grant Writing",         "Composing structured proposal sections"),
-    ("novelty",     "Novelty Scoring",       "Benchmarking originality against the corpus"),
-    ("done",        "Complete",              ""),
+    ("literature",  "Literature Mining",    "Retrieving and indexing papers from ArXiv and Semantic Scholar"),
+    ("trends",      "Trend Analysis",       "Detecting how the research field has evolved over time"),
+    ("gaps",        "Gap Identification",   "Mapping under-explored areas in the literature"),
+    ("methodology", "Methodology Design",   "Designing experiment, datasets, baselines, and metrics"),
+    ("grant",       "Grant Writing",        "Composing structured proposal sections"),
+    ("novelty",     "Novelty Scoring",      "Benchmarking originality against the corpus"),
+    ("done",        "Complete",             ""),
 ]
-step_progress = {s: i / (len(AGENT_STEPS)-1) for i, (s,_,__) in enumerate(AGENT_STEPS)}
+step_prog = {s: i/(len(AGENT_STEPS)-1) for i,(s,_,__) in enumerate(AGENT_STEPS)}
 
 if run_pipeline:
     if not research_topic.strip():
-        st.markdown('<div class="warn-bar">A research topic is required. Please enter one in the sidebar.</div>', unsafe_allow_html=True)
-    elif not gemini_key.strip():
-        st.markdown('<div class="warn-bar">A Gemini API key is required. Get one free at aistudio.google.com.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="warn-bar">Please enter a research topic in the sidebar.</div>', unsafe_allow_html=True)
+    elif not os.getenv("GEMINI_API_KEY","").strip():
+        st.markdown('<div class="warn-bar">Gemini API key is not configured. Add it to your Streamlit secrets or .env file.</div>', unsafe_allow_html=True)
     else:
         st.session_state.pipeline_log = []
         st.markdown('<div class="info-bar">Pipeline running — this takes 1–3 minutes. Do not refresh the page.</div>', unsafe_allow_html=True)
 
-        prog_bar   = st.progress(0)
-        col_prog, col_log = st.columns([1, 1])
-
-        with col_prog:
-            prog_status = st.empty()
-        with col_log:
-            log_area = st.empty()
-
-        agent_states = {s: "wait" for s,_,__ in AGENT_STEPS[:-1]}
+        prog_bar    = st.progress(0)
+        col_s, col_l = st.columns(2)
+        prog_status  = col_s.empty()
+        log_area     = col_l.empty()
+        agent_states = {s:"wait" for s,_,__ in AGENT_STEPS[:-1]}
 
         def progress_cb(step, msg):
             st.session_state.pipeline_log.append((step, msg))
-            prog_bar.progress(step_progress.get(step, 0))
+            prog_bar.progress(step_prog.get(step, 0))
             if step in agent_states:
                 agent_states[step] = "done"
-
-            # Status text
             prog_status.markdown(
-                f"<div style='font-size:.8rem;color:#c9a84c;padding:.4rem 0'>"
-                f"<span style='font-family:IBM Plex Mono,monospace'>Running</span> — {msg}</div>",
-                unsafe_allow_html=True,
+                f"<div style='font-size:.8rem;color:{\"#1a56db\" };padding:.3rem 0'>"
+                f"Running: {msg}</div>", unsafe_allow_html=True)
+            rows = "".join(
+                f"<div class='step-row'><span class='step-dot dot-{agent_states.get(s,\"wait\")}'></span>"
+                f"<span class='step-text-{agent_states.get(s,\"wait\")}'><b>{lbl}</b> — {desc}</span></div>"
+                for s, lbl, desc in AGENT_STEPS[:-1]
             )
-
-            # Agent log panel
-            rows = ""
-            for s, label, desc in AGENT_STEPS[:-1]:
-                state = agent_states.get(s, "wait")
-                dot   = f"dot-{state}"
-                txt   = f"step-text-{state}"
-                rows += (
-                    f"<div class='step-row'>"
-                    f"<span class='step-dot {dot}'></span>"
-                    f"<span class='{txt}'><b>{label}</b> — {desc}</span>"
-                    f"</div>"
-                )
-            log_area.markdown(
-                f"<div class='data-card' style='padding:1rem'>{rows}</div>",
-                unsafe_allow_html=True,
-            )
+            log_area.markdown(f"<div class='data-card' style='padding:1rem'>{rows}</div>", unsafe_allow_html=True)
 
         request = ResearchRequest(
             topic=research_topic, domain=domain,
@@ -615,10 +395,8 @@ if run_pipeline:
             st.session_state.report = report
             prog_bar.progress(1.0)
             prog_status.markdown(
-                "<div style='font-size:.82rem;color:#68d391;padding:.4rem 0;font-weight:600'>"
-                "Pipeline complete. View results below.</div>",
-                unsafe_allow_html=True,
-            )
+                "<div style='font-size:.82rem;color:#166534;font-weight:600;padding:.3rem 0'>"
+                "Pipeline complete. View results below.</div>", unsafe_allow_html=True)
         except Exception as e:
             st.error(f"Pipeline error: {e}")
             logger.exception(e)
@@ -628,27 +406,26 @@ if run_pipeline:
 # ═══════════════════════════════════════════════════════════════
 report = st.session_state.report
 
-if report:
-    st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
+def conf_bar(score, label="Confidence"):
+    pct   = int(score * 100)
+    color = ("#166534" if score>=.7 else "#854d0e" if score>=.4 else "#7f1d1d")
+    grade = ("High" if score>=.7 else "Moderate" if score>=.4 else "Low")
+    return (
+        f"<div class='conf-row'>"
+        f"<div class='conf-header'>"
+        f"<span class='conf-name'>{label}</span>"
+        f"<span class='conf-pct' style='color:{color}'>{grade} — {pct}%</span>"
+        f"</div>"
+        f"<div class='conf-track'>"
+        f"<div class='conf-fill' style='width:{pct}%;background:{color}'></div>"
+        f"</div></div>"
+    )
 
+if report:
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "OVERVIEW", "GAPS & TRENDS", "METHODOLOGY", "GRANT PROPOSAL", "ASSISTANT"
     ])
-
-    def conf_bar(score: float, label: str = "Confidence"):
-        pct   = int(score * 100)
-        color = ("#68d391" if score>=.7 else "#ecc94b" if score>=.4 else "#fc8181")
-        grade = ("High" if score>=.7 else "Moderate" if score>=.4 else "Low")
-        return (
-            f"<div class='conf-row'>"
-            f"<div class='conf-header'>"
-            f"<span class='conf-name'>{label}</span>"
-            f"<span class='conf-pct' style='color:{color}'>{grade} &nbsp;{pct}%</span>"
-            f"</div>"
-            f"<div class='conf-track'>"
-            f"<div class='conf-fill' style='width:{pct}%;background:{color}'></div>"
-            f"</div></div>"
-        )
 
     # ── OVERVIEW ──────────────────────────────────────────────
     with tab1:
@@ -659,52 +436,54 @@ if report:
 
         st.markdown(
             f"<div class='stat-row'>"
-            f"<div class='stat-card'><div class='stat-label'>Papers Retrieved</div>"
+            f"<div class='stat-card'>"
+            f"<div class='stat-label'>Papers Retrieved</div>"
             f"<div class='stat-value'>{fetched}</div>"
-            f"<div class='stat-delta'>{report.literature.get('new_ingested',0)} newly added to corpus</div></div>"
-            f"<div class='stat-card teal'><div class='stat-label'>Research Gaps</div>"
+            f"<div class='stat-delta'>{report.literature.get('new_ingested',0)} newly added</div></div>"
+            f"<div class='stat-card teal'>"
+            f"<div class='stat-label'>Research Gaps</div>"
             f"<div class='stat-value'>{n_gaps}</div>"
             f"<div class='stat-delta'>Identified from literature</div></div>"
-            f"<div class='stat-card green'><div class='stat-label'>Novelty Score</div>"
+            f"<div class='stat-card green'>"
+            f"<div class='stat-label'>Novelty Score</div>"
             f"<div class='stat-value'>{novelty:.2f}</div>"
             f"<div class='stat-delta'>{report.novelty.get('novelty_label','').replace('_',' ').title()}</div></div>"
-            f"<div class='stat-card slate'><div class='stat-label'>Proposal Sections</div>"
+            f"<div class='stat-card slate'>"
+            f"<div class='stat-label'>Proposal Sections</div>"
             f"<div class='stat-value'>{n_secs}</div>"
             f"<div class='stat-delta'>Ready to download</div></div>"
             f"</div>",
             unsafe_allow_html=True,
         )
 
-        col_a, col_b = st.columns([1.1, 0.9])
+        col_a, col_b = st.columns(2)
+
         with col_a:
             # Novelty gauge
             fig = go.Figure(go.Indicator(
                 mode="gauge+number",
                 value=novelty,
-                number={"font": {"size": 34, "color": "#a07830",
-                                 "family": "Playfair Display"}},
+                number={"font": {"size":32, "color":"#1a56db", "family":"IBM Plex Mono"}},
                 gauge={
-                    "axis": {"range": [0,1], "tickcolor": "#d1d5db",
-                             "tickfont": {"color":"#d1d5db","size":10}},
-                    "bar":  {"color": "#c9a84c", "thickness": .22},
-                    "bgcolor": "rgba(0,0,0,0)",
-                    "borderwidth": 0,
+                    "axis": {"range":[0,1], "tickcolor":"#d1d9e0",
+                             "tickfont":{"color":"#6b7280","size":10}},
+                    "bar":  {"color":"#1a56db", "thickness":.22},
+                    "bgcolor": "rgba(0,0,0,0)", "borderwidth": 0,
                     "steps": [
-                        {"range":[0,.35],  "color":"rgba(192,57,43,.08)"},
-                        {"range":[.35,.55],"color":"rgba(201,168,76,.10)"},
-                        {"range":[.55,.75],"color":"rgba(14,124,118,.08)"},
-                        {"range":[.75,1],  "color":"rgba(160,120,48,.12)"},
+                        {"range":[0,.35],  "color":"rgba(239,68,68,.12)"},
+                        {"range":[.35,.55],"color":"rgba(234,179,8,.10)"},
+                        {"range":[.55,.75],"color":"rgba(34,197,94,.10)"},
+                        {"range":[.75,1],  "color":"rgba(26,86,219,.12)"},
                     ],
                 },
-                title={"text":"Novelty Score","font":{"color":"#6b7590","size":12,"family":"IBM Plex Sans"}},
+                title={"text":"Novelty Score","font":{"color":"#6b7280","size":12,"family":"IBM Plex Sans"}},
             ))
-            fig.update_layout(
-                height=240, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                font_color=None, margin=dict(l=20,r=20,t=40,b=0),
-            )
+            fig.update_layout(height=230, paper_bgcolor="rgba(0,0,0,0)",
+                              plot_bgcolor="rgba(0,0,0,0)",
+                              margin=dict(l=20,r=20,t=40,b=0))
             st.plotly_chart(fig, use_container_width=True)
             st.markdown(
-                f"<div style='text-align:center;font-size:.76rem;color:#6b7590;margin-top:-8px;line-height:1.5'>"
+                f"<div style='text-align:center;font-size:.78rem;color:#374151;margin-top:-6px'>"
                 f"{report.novelty.get('recommendation','')}</div>",
                 unsafe_allow_html=True,
             )
@@ -717,74 +496,58 @@ if report:
                     yc = df["year"].value_counts().sort_index()
                     fig2 = go.Figure(go.Bar(
                         x=yc.index.astype(str), y=yc.values,
-                        marker_color="#a07830",
-                        marker_opacity=0.75,
+                        marker_color="#1a56db", marker_opacity=0.8,
                         hovertemplate="%{x}: %{y} papers<extra></extra>",
                     ))
                     fig2.update_layout(
-                        title=dict(text="Publication Year Distribution",
-                                   font=dict(size=11,color="#6b7590",family="IBM Plex Sans")),
-                        height=240,
+                        title=dict(text="Papers by Year",
+                                   font=dict(size=11,color="#6b7280",family="IBM Plex Sans")),
+                        height=230,
                         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                         margin=dict(l=10,r=10,t=36,b=10),
-                        xaxis=dict(gridcolor="rgba(255,255,255,0.04)", color="#6b7590",
-                                   tickfont=dict(size=10)),
-                        yaxis=dict(gridcolor="rgba(255,255,255,0.04)", color="#6b7590",
-                                   tickfont=dict(size=10)),
+                        xaxis=dict(gridcolor="#f3f4f6", color="#6b7280", tickfont=dict(size=10)),
+                        yaxis=dict(gridcolor="#f3f4f6", color="#6b7280", tickfont=dict(size=10)),
                     )
                     st.plotly_chart(fig2, use_container_width=True)
 
         # Confidence panel
         st.markdown("<div class='data-card'>", unsafe_allow_html=True)
         st.markdown('<span class="sec-label">Agent Confidence Scores</span>', unsafe_allow_html=True)
-        st.markdown(
-            "<div style='font-size:.75rem;color:#6b7590;margin-bottom:14px'>"
-            "Scores reflect paper volume retrieved, semantic clustering quality, and output completeness.</div>",
-            unsafe_allow_html=True,
-        )
-        lit_conf  = min(fetched/30, 1.0)
-        gap_conf  = report.gaps.get("novelty_score", 0.5)
-        meth_conf = 0.85 if report.methodology.get("hypothesis") else 0.4
-        grt_conf  = min(n_secs/6, 1.0)
-        nov_conf  = novelty
         for lbl, sc in [
-            ("Literature Mining",  lit_conf),
-            ("Gap Identification", gap_conf),
-            ("Methodology Design", meth_conf),
-            ("Grant Writing",      grt_conf),
-            ("Novelty Scoring",    nov_conf),
+            ("Literature Mining",   min(fetched/30, 1.0)),
+            ("Gap Identification",  report.gaps.get("novelty_score", 0.5)),
+            ("Methodology Design",  0.85 if report.methodology.get("hypothesis") else 0.4),
+            ("Grant Writing",       min(n_secs/6, 1.0)),
+            ("Novelty Scoring",     novelty),
         ]:
             st.markdown(conf_bar(sc, lbl), unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
         # Papers table
         if papers:
-            st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
             st.markdown('<span class="sec-label">Retrieved Papers</span>', unsafe_allow_html=True)
             df_show = pd.DataFrame(papers)[["title","year","authors","source","similarity"]].head(12)
             df_show.columns = ["Title","Year","Authors","Source","Relevance"]
-            st.dataframe(df_show, use_container_width=True, height=300)
+            st.dataframe(df_show, use_container_width=True, height=280)
 
-    # ── GAPS & TRENDS ────────────────────────────────────────
+    # ── GAPS & TRENDS ─────────────────────────────────────────
     with tab2:
-        col1, col2 = st.columns([1.15, 0.85])
+        col1, col2 = st.columns([1.1, 0.9])
 
         with col1:
             st.markdown("<div class='data-card'>", unsafe_allow_html=True)
-            st.markdown('<span class="sec-label">Identified Research Gaps</span>', unsafe_allow_html=True)
+            st.markdown('<span class="sec-label">Research Gaps</span>', unsafe_allow_html=True)
             st.markdown(
-                "<div style='font-size:.75rem;color:#6b7590;margin-bottom:14px;line-height:1.6'>"
-                "Areas identified as under-explored in the existing literature. "
-                "Confidence reflects the strength of supporting evidence.</div>",
+                "<div style='font-size:.78rem;color:#374151;margin-bottom:12px;line-height:1.6'>"
+                "Areas identified as under-explored in the existing literature.</div>",
                 unsafe_allow_html=True,
             )
-            gaps   = report.gaps.get("identified_gaps", [])
             base_c = report.gaps.get("novelty_score", 0.6)
-            for i, gap in enumerate(gaps):
+            for i, gap in enumerate(report.gaps.get("identified_gaps", [])):
                 gc = round(min(base_c + (.04 if i%2==0 else -.04), .98), 2)
                 st.markdown(
-                    f"<div class='gap-item'><div class='gap-num'>Gap {i+1}</div>{gap}"
-                    f"{conf_bar(gc,'Confidence')}</div>",
+                    f"<div class='gap-item'><div class='gap-num'>Gap {i+1}</div>"
+                    f"{gap}{conf_bar(gc,'Confidence')}</div>",
                     unsafe_allow_html=True,
                 )
             st.markdown("</div>", unsafe_allow_html=True)
@@ -794,109 +557,96 @@ if report:
                 st.markdown('<span class="sec-label">Opportunity Areas</span>', unsafe_allow_html=True)
                 for opp in report.gaps["opportunity_areas"]:
                     st.markdown(
-                        f"<div style='padding:.6rem 0;border-bottom:1px solid rgba(255,255,255,.05);"
-                        f"font-size:.83rem;color:#4b5563;line-height:1.6'>{opp}</div>",
+                        f"<div style='padding:.55rem 0;border-bottom:1px solid #e5e7eb;"
+                        f"font-size:.83rem;color:#1e293b;line-height:1.6'>{opp}</div>",
                         unsafe_allow_html=True,
                     )
                 st.markdown("</div>", unsafe_allow_html=True)
 
         with col2:
             st.markdown("<div class='data-card'>", unsafe_allow_html=True)
-            st.markdown('<span class="sec-label">Emerging Sub-Fields</span>', unsafe_allow_html=True)
+            st.markdown('<span class="sec-label">Emerging Topics</span>', unsafe_allow_html=True)
             st.markdown(
-                "<div style='font-size:.75rem;color:#6b7590;margin-bottom:12px'>"
-                "Topics gaining traction in recent publications.</div>", unsafe_allow_html=True)
+                "<div style='font-size:.75rem;color:#374151;margin-bottom:10px'>"
+                "Gaining traction in recent publications.</div>", unsafe_allow_html=True)
             for t in report.trends.get("emerging_topics", []):
-                st.markdown(f"<span class='pill pill-teal'>{t}</span>", unsafe_allow_html=True)
-            st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
+                st.markdown(f"<span class='pill pill-green'>{t}</span>", unsafe_allow_html=True)
+            st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
             st.markdown('<span class="sec-label">Declining Topics</span>', unsafe_allow_html=True)
             st.markdown(
-                "<div style='font-size:.75rem;color:#6b7590;margin-bottom:12px'>"
-                "Topics appearing less frequently in recent work.</div>", unsafe_allow_html=True)
+                "<div style='font-size:.75rem;color:#374151;margin-bottom:10px'>"
+                "Appearing less frequently in recent work.</div>", unsafe_allow_html=True)
             for t in report.trends.get("declining_topics", []):
                 st.markdown(f"<span class='pill pill-red'>{t}</span>", unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
             if report.trends.get("trend_summary"):
                 st.markdown("<div class='data-card'>", unsafe_allow_html=True)
-                st.markdown('<span class="sec-label">Field Trend Summary</span>', unsafe_allow_html=True)
+                st.markdown('<span class="sec-label">Field Summary</span>', unsafe_allow_html=True)
                 st.markdown(
-                    f"<div style='font-size:.82rem;line-height:1.8;color:#a0aec0'>"
-                    f"{report.trends['trend_summary']}</div>",
-                    unsafe_allow_html=True,
-                )
+                    f"<div style='font-size:.82rem;line-height:1.8;color:#1e293b'>"
+                    f"{report.trends['trend_summary']}</div>", unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
 
             st.markdown("<div class='data-card'>", unsafe_allow_html=True)
             st.markdown('<span class="sec-label">Novelty Analysis</span>', unsafe_allow_html=True)
-            st.markdown(conf_bar(report.novelty.get("novelty_score",0), "Overall Novelty"), unsafe_allow_html=True)
+            st.markdown(conf_bar(novelty, "Overall Novelty"), unsafe_allow_html=True)
             st.markdown(
-                f"<div style='font-size:.75rem;color:#6b7590;margin-top:8px;line-height:1.6'>"
-                f"Rating: <b style='color:#c9a84c'>"
-                f"{report.novelty.get('novelty_label','').replace('_',' ').title()}</b><br>"
-                f"Compared against {report.novelty.get('corpus_size',0)} papers in corpus.</div>",
+                f"<div style='font-size:.75rem;color:#374151;margin-top:6px'>"
+                f"Rating: <b style='color:#1a56db'>"
+                f"{report.novelty.get('novelty_label','').replace('_',' ').title()}</b>"
+                f" — compared against {report.novelty.get('corpus_size',0)} papers</div>",
                 unsafe_allow_html=True,
             )
             st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── METHODOLOGY ──────────────────────────────────────────
+    # ── METHODOLOGY ───────────────────────────────────────────
     with tab3:
         hyp = report.methodology.get("hypothesis","")
         if hyp:
             st.markdown(
-                f"<div class='hypothesis'><b style='color:#4fd1c5;font-size:.7rem;"
-                f"letter-spacing:.1em;text-transform:uppercase;font-style:normal'>Hypothesis</b>"
-                f"<br><br>{hyp}</div>",
-                unsafe_allow_html=True,
-            )
+                f"<div class='hypothesis'>"
+                f"<div style='font-size:.65rem;font-weight:700;letter-spacing:.1em;"
+                f"text-transform:uppercase;color:#1a56db;font-style:normal;margin-bottom:8px'>"
+                f"Hypothesis</div>{hyp}</div>", unsafe_allow_html=True)
 
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("<div class='data-card'>", unsafe_allow_html=True)
             st.markdown('<span class="sec-label">Experimental Approach</span>', unsafe_allow_html=True)
-            st.markdown(
-                "<div style='font-size:.75rem;color:#6b7590;margin-bottom:12px'>"
-                "Recommended step-by-step methodology for this research direction.</div>",
-                unsafe_allow_html=True,
-            )
             for i, step in enumerate(report.methodology.get("approach",[]), 1):
                 st.markdown(
-                    f"<div class='approach-step'>"
-                    f"<span class='step-num'>{i:02d}.</span>"
-                    f"<span>{step}</span></div>",
-                    unsafe_allow_html=True,
-                )
+                    f"<div class='approach-step'><span class='step-num'>{i:02d}.</span>"
+                    f"<span>{step}</span></div>", unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
             st.markdown("<div class='data-card'>", unsafe_allow_html=True)
             st.markdown('<span class="sec-label">Recommended Datasets</span>', unsafe_allow_html=True)
             for ds in report.methodology.get("suggested_datasets",[]):
-                st.markdown(f"<span class='pill pill-gold'>{ds}</span>", unsafe_allow_html=True)
+                st.markdown(f"<span class='pill pill-blue'>{ds}</span>", unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
         with col2:
             st.markdown("<div class='data-card'>", unsafe_allow_html=True)
             st.markdown('<span class="sec-label">Baseline Comparisons</span>', unsafe_allow_html=True)
             st.markdown(
-                "<div style='font-size:.75rem;color:#6b7590;margin-bottom:12px'>"
+                "<div style='font-size:.75rem;color:#374151;margin-bottom:10px'>"
                 "Existing approaches your work should be benchmarked against.</div>",
                 unsafe_allow_html=True,
             )
             for bl in report.methodology.get("baselines",[]):
                 st.markdown(
                     f"<div style='font-family:IBM Plex Mono,monospace;font-size:.78rem;"
-                    f"color:#a0aec0;padding:.35rem .7rem;margin:.25rem 0;"
-                    f"border:1px solid rgba(255,255,255,.07);border-radius:4px;"
-                    f"background:rgba(0,0,0,.03)'>{bl}</div>",
-                    unsafe_allow_html=True,
-                )
+                    f"color:#1e293b;padding:.3rem .7rem;margin:.25rem 0;"
+                    f"border:1px solid #e2e8f0;border-radius:4px;background:#f8fafc'>"
+                    f"{bl}</div>", unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
             st.markdown("<div class='data-card'>", unsafe_allow_html=True)
             st.markdown('<span class="sec-label">Evaluation Metrics</span>', unsafe_allow_html=True)
             for m in report.methodology.get("evaluation_metrics",[]):
                 st.markdown(f"<span class='pill pill-slate'>{m}</span>", unsafe_allow_html=True)
-            st.markdown("<br><br>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
             st.markdown(conf_bar(0.85 if hyp else 0.4, "Methodology Confidence"), unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
@@ -905,101 +655,80 @@ if report:
             st.markdown('<span class="sec-label">Expected Contributions</span>', unsafe_allow_html=True)
             for o in report.methodology["expected_outcomes"]:
                 st.markdown(
-                    f"<div style='padding:.5rem 0;border-bottom:1px solid rgba(255,255,255,.05);"
-                    f"font-size:.83rem;color:#a0aec0;line-height:1.6'>{o}</div>",
-                    unsafe_allow_html=True,
-                )
+                    f"<div style='padding:.5rem 0;border-bottom:1px solid #e5e7eb;"
+                    f"font-size:.83rem;color:#1e293b;line-height:1.6'>{o}</div>",
+                    unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── GRANT PROPOSAL ───────────────────────────────────────
+    # ── GRANT PROPOSAL ────────────────────────────────────────
     with tab4:
         st.markdown(
             f"<div class='grant-meta-row'>"
-            f"<div class='grant-meta-item'><div class='grant-meta-label'>Agency</div>"
-            f"<div class='grant-meta-val'>{report.grant.get('agency','')}</div></div>"
-            f"<div class='grant-meta-item'><div class='grant-meta-label'>Principal Investigator</div>"
-            f"<div class='grant-meta-val'>{report.grant.get('pi_name','')}</div></div>"
-            f"<div class='grant-meta-item'><div class='grant-meta-label'>Institution</div>"
-            f"<div class='grant-meta-val'>{report.grant.get('institution','')}</div></div>"
-            f"<div class='grant-meta-item'><div class='grant-meta-label'>Budget</div>"
-            f"<div class='grant-meta-val'>{report.grant.get('budget_total','')}</div></div>"
-            f"<div class='grant-meta-item'><div class='grant-meta-label'>Duration</div>"
-            f"<div class='grant-meta-val'>{report.grant.get('duration_years','')} years</div></div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+            f"<div><div class='grant-meta-label'>Agency</div><div class='grant-meta-val'>{report.grant.get('agency','')}</div></div>"
+            f"<div><div class='grant-meta-label'>Principal Investigator</div><div class='grant-meta-val'>{report.grant.get('pi_name','')}</div></div>"
+            f"<div><div class='grant-meta-label'>Institution</div><div class='grant-meta-val'>{report.grant.get('institution','')}</div></div>"
+            f"<div><div class='grant-meta-label'>Budget</div><div class='grant-meta-val'>{report.grant.get('budget_total','')}</div></div>"
+            f"<div><div class='grant-meta-label'>Duration</div><div class='grant-meta-val'>{report.grant.get('duration_years','')} years</div></div>"
+            f"</div>", unsafe_allow_html=True)
 
         n_secs = len(report.grant.get("sections",{}))
         st.markdown(conf_bar(min(n_secs/6,1.0), f"Completeness — {n_secs} sections generated"), unsafe_allow_html=True)
-        st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
 
         for section, content in report.grant.get("sections",{}).items():
             with st.expander(section):
-                st.markdown(
-                    f"<div style='font-size:.84rem;line-height:1.8;color:#374151'>{content}</div>",
-                    unsafe_allow_html=True,
-                )
+                st.markdown(f"<div style='font-size:.84rem;line-height:1.85;color:#1e293b'>{content}</div>", unsafe_allow_html=True)
 
         st.divider()
         st.markdown('<span class="sec-label">Download Proposal</span>', unsafe_allow_html=True)
         st.markdown(
-            "<div style='font-size:.76rem;color:#6b7590;margin-bottom:14px;line-height:1.6'>"
+            "<div style='font-size:.76rem;color:#374151;margin-bottom:12px'>"
             "PDF and DOCX are submission-ready. Markdown is best for further editing.</div>",
             unsafe_allow_html=True,
         )
         ec1, ec2, ec3 = st.columns(3)
-
         with ec1:
             if st.button("Generate PDF", use_container_width=True):
                 path = export_proposal_pdf(report.grant, "./outputs")
                 if path and os.path.exists(path):
                     with open(path,"rb") as f:
-                        st.download_button("Download PDF", f,
-                            file_name=os.path.basename(path), mime="application/pdf",
-                            use_container_width=True)
+                        st.download_button("Download PDF", f, file_name=os.path.basename(path),
+                                           mime="application/pdf", use_container_width=True)
                 else:
                     st.error("PDF generation failed.")
-
         with ec2:
             if st.button("Generate Word Document", use_container_width=True):
                 path = export_proposal_docx(report.grant, "./outputs")
                 if path and os.path.exists(path):
                     with open(path,"rb") as f:
-                        st.download_button("Download DOCX", f,
-                            file_name=os.path.basename(path),
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                            use_container_width=True)
+                        st.download_button("Download DOCX", f, file_name=os.path.basename(path),
+                                           mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                           use_container_width=True)
                 else:
                     st.error("DOCX generation failed.")
-
         with ec3:
             if st.button("Generate Markdown Report", use_container_width=True):
-                report_dict = {
-                    "literature": report.literature, "trends": report.trends,
-                    "gaps": report.gaps, "methodology": report.methodology,
-                    "grant": {k:v for k,v in report.grant.items() if k!="full_proposal"},
-                    "novelty": report.novelty,
-                }
-                path = export_report_markdown(report_dict, "./outputs")
+                rd = {"literature": report.literature, "trends": report.trends,
+                      "gaps": report.gaps, "methodology": report.methodology,
+                      "grant": {k:v for k,v in report.grant.items() if k!="full_proposal"},
+                      "novelty": report.novelty}
+                path = export_report_markdown(rd, "./outputs")
                 if path and os.path.exists(path):
                     with open(path) as f:
-                        st.download_button("Download Markdown", f,
-                            file_name=os.path.basename(path), mime="text/markdown",
-                            use_container_width=True)
+                        st.download_button("Download Markdown", f, file_name=os.path.basename(path),
+                                           mime="text/markdown", use_container_width=True)
 
-    # ── ASSISTANT ────────────────────────────────────────────
+    # ── ASSISTANT ─────────────────────────────────────────────
     with tab5:
         st.markdown("<div class='data-card' style='margin-bottom:1rem'>", unsafe_allow_html=True)
         st.markdown('<span class="sec-label">Research Assistant</span>', unsafe_allow_html=True)
         st.markdown(
-            "<div style='font-size:.8rem;color:#6b7590;line-height:1.7'>"
+            "<div style='font-size:.82rem;color:#374151;line-height:1.7'>"
             "Ask questions about your research results, proposal content, gaps, or novelty scores. "
-            "The assistant has full context of the current report.<br><br>"
-            "<b style='color:#6b7280'>Suggested:</b> "
-            "What does my novelty score mean? &nbsp;|&nbsp; "
+            "The assistant has full context of the current report.</div>"
+            "<div style='font-size:.78rem;color:#6b7280;margin-top:.6rem'>"
+            "<b>Try:</b> What does my novelty score mean? &nbsp;|&nbsp; "
             "Which gap should I prioritise? &nbsp;|&nbsp; "
-            "Is this proposal ready for submission? &nbsp;|&nbsp; "
-            "Summarise the top papers found."
+            "Is this proposal ready for submission?"
             "</div>",
             unsafe_allow_html=True,
         )
@@ -1016,17 +745,17 @@ if report:
                 st.write(user_input)
 
             context = f"""You are a senior academic research assistant.
-Current report data:
+Report data:
 - Topic: {report.request.topic}
 - Agency: {report.grant.get('agency','')}
 - Novelty score: {report.novelty.get('novelty_score',0):.2f} ({report.novelty.get('novelty_label','')})
 - Papers retrieved: {report.literature.get('fetched',0)}
-- Research gaps: {'; '.join(report.gaps.get('identified_gaps',[])[:4])}
+- Gaps: {'; '.join(report.gaps.get('identified_gaps',[])[:4])}
 - Emerging trends: {'; '.join(report.trends.get('emerging_topics',[])[:3])}
 - Hypothesis: {report.methodology.get('hypothesis','Not generated')}
 - Proposal sections: {', '.join(report.grant.get('sections',{}).keys())}
 - Recommendation: {report.novelty.get('recommendation','')}
-Respond with clarity and precision. Reference specific numbers and findings. Be direct and actionable."""
+Be direct, concise, and reference specific data from the report."""
 
             from core.llm_factory import get_llm
             from langchain_core.messages import HumanMessage, SystemMessage
@@ -1038,48 +767,34 @@ Respond with clarity and precision. Reference specific numbers and findings. Be 
                           for m in st.session_state.chat_history[-8:]]]
                 reply = llm.invoke(msgs).content
             except Exception as e:
-                reply = f"Unable to generate response: {e}. Please verify your API key."
+                reply = f"Unable to generate a response: {e}"
 
             st.session_state.chat_history.append({"role":"assistant","content":reply})
             with st.chat_message("assistant"):
                 st.write(reply)
 
-# ── EMPTY STATE ─────────────────────────────────────────────────
+# ── EMPTY STATE ──────────────────────────────────────────────────
 else:
-    st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
-
     st.markdown(
         "<div class='info-bar' style='text-align:center'>"
-        "Configure your research parameters in the left panel and click <b>Run Research Pipeline</b> to begin."
-        "</div>",
-        unsafe_allow_html=True,
-    )
+        "Fill in the research parameters in the left panel and click "
+        "<b>Run Research Pipeline</b> to begin."
+        "</div>", unsafe_allow_html=True)
 
     c1, c2, c3 = st.columns(3)
-    cards = [
+    for col, title, body in zip([c1,c2,c3], [
         ("What it does",
-         "Runs six specialised AI agents in sequence: retrieves papers from ArXiv and Semantic Scholar, "
-         "detects how the field is evolving, identifies under-explored research gaps, "
-         "designs an experimental methodology, writes a complete grant proposal, "
-         "and scores the originality of the proposed work against the corpus."),
+         "Runs six AI agents in sequence — retrieves papers from ArXiv and Semantic Scholar, detects how the field is evolving, identifies under-explored gaps, designs an experimental methodology, writes a grant proposal, and scores the originality of the proposed work."),
         ("What you need",
-         "A Gemini API key (free at aistudio.google.com), a research topic described in "
-         "one or two sentences, and standard grant details — PI name, institution, "
-         "funding agency, and budget. No local setup or installation is required."),
+         "A research topic described in one or two sentences, and standard grant details — PI name, institution, funding agency, and budget. The Gemini API key is pre-configured and does not need to be entered."),
         ("What you receive",
-         "A novelty score with explanation, a prioritised list of research gaps, a suggested "
-         "experimental design with recommended datasets and baselines, and a complete grant "
-         "proposal ready for download as PDF, Word document, or Markdown — formatted for "
-         "NSF, NIH, DARPA, or EU Horizon."),
-    ]
-    for col, (title, body) in zip([c1,c2,c3], cards):
+         "A novelty score, a prioritised list of research gaps, a suggested experimental design with datasets and baselines, and a complete grant proposal ready to download as PDF, Word, or Markdown — formatted for NSF, NIH, DARPA, or EU Horizon."),
+    ]):
         with col:
             st.markdown(
-                f"<div class='data-card' style='height:100%'>"
-                f"<div class='card-heading'>{title}</div>"
-                f"<div style='height:4px;width:32px;background:var(--gold);"
-                f"border-radius:2px;margin:.6rem 0 .9rem'></div>"
-                f"<div style='font-size:.82rem;line-height:1.8;color:#8892a4'>{body}</div>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
+                f"<div class='data-card'>"
+                f"<div class='card-title'>{title}</div>"
+                f"<div style='height:3px;width:28px;background:#1a56db;"
+                f"border-radius:2px;margin:.5rem 0 .85rem'></div>"
+                f"<div style='font-size:.82rem;line-height:1.8;color:#374151'>{body}</div>"
+                f"</div>", unsafe_allow_html=True)
