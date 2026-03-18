@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Models that require a paid/billing-enabled account — downgrade to free tier automatically.
 # gemini-2.5-pro is intentionally NOT in this list: it has a limited free tier
 # (25 req/day, 5 RPM) and is the user-requested model.
-_GEMINI_FREE_TIER_MODEL = "gemini-2.5-flash"   # fallback if a blocked model is requested
+_GEMINI_FREE_TIER_MODEL = "gemini-1.5-flash"   # fallback if a blocked model is requested
 _GEMINI_PAID_MODELS = {
     "gemini-2.0-flash",
     "gemini-2.0-flash-001",
@@ -130,23 +130,59 @@ def get_llm(temperature: float = 0.3):
     )
 
 
+def _parse_retry_delay(err_str: str) -> float:
+    """
+    Extract the retry_delay seconds from a Gemini 429 error message.
+    Falls back to base_delay if not found.
+    """
+    import re
+    match = re.search(r"retry_delay['\"]?\s*[:{]\s*['\"]?seconds['\"]?\s*[:=]\s*(\d+)", err_str, re.IGNORECASE)
+    if match:
+        return float(match.group(1))
+    match = re.search(r"retry.in.(\d+).second", err_str, re.IGNORECASE)
+    if match:
+        return float(match.group(1))
+    return None
+
+
 def invoke_with_retry(llm, messages, retries: int = 3, base_delay: float = 5.0):
     """
-    Call llm.invoke(messages) with exponential backoff on 429 / 503 errors.
+    Call llm.invoke(messages) with smart retry logic:
+    - Parses the retry_delay from Gemini 429 responses and waits exactly that long
+    - Distinguishes per-minute rate limits (retryable) from daily quota exhaustion (not retryable)
+    - Raises a clear QuotaExhaustedError for daily quota so the app can show a helpful message
     """
     last_exc = None
     for attempt in range(retries + 1):
         try:
             return llm.invoke(messages)
         except Exception as exc:
-            err_str = str(exc).upper()
-            is_retryable = any(k in err_str for k in (
+            err_str = str(exc)
+            err_upper = err_str.upper()
+
+            is_rate_limited = any(k in err_upper for k in (
                 "429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE", "RATE_LIMIT",
             ))
-            if is_retryable and attempt < retries:
-                wait = base_delay * (2 ** attempt)
+
+            # Daily quota exhausted — not retryable, fail immediately with clear message
+            is_daily_quota = any(k in err_upper for k in (
+                "PERDAY", "PER_DAY", "DAILY", "DAY_LIMIT",
+            ))
+            if is_daily_quota or (is_rate_limited and "FREEDAY" in err_upper.replace("_", "").replace("-", "")):
+                raise RuntimeError(
+                    "Daily free-tier quota exhausted for this model. "
+                    "You have used all free requests for today. "
+                    "Options: (1) wait until midnight PT for the quota to reset, "
+                    "(2) switch to a model with a higher daily limit, "
+                    "or (3) add billing to your Google AI account."
+                ) from exc
+
+            if is_rate_limited and attempt < retries:
+                # Honour the retry_delay from the API response if present
+                suggested = _parse_retry_delay(err_str)
+                wait = suggested if suggested else base_delay * (2 ** attempt)
                 logger.warning(
-                    "LLM rate-limit hit (attempt %d/%d). Retrying in %.0fs.",
+                    "LLM rate-limit hit (attempt %d/%d). Waiting %.0fs as suggested by API.",
                     attempt + 1, retries, wait,
                 )
                 time.sleep(wait)

@@ -437,6 +437,16 @@ if run_pipeline:
                 prog_status.markdown(
                     "<div style='font-size:.82rem;color:#166534;font-weight:600;padding:.3rem 0'>"
                     "Pipeline complete. View results below.</div>", unsafe_allow_html=True)
+            except RuntimeError as e:
+                err_msg = str(e)
+                if "quota" in err_msg.lower() or "daily" in err_msg.lower():
+                    st.markdown(
+                        f'<div class="warn-bar"><b>Daily quota exhausted.</b> {err_msg}</div>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.error(f"Pipeline error: {e}")
+                logger.exception(e)
             except Exception as e:
                 st.error(f"Pipeline error: {e}")
                 logger.exception(e)
