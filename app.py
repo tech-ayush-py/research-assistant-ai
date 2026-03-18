@@ -10,17 +10,27 @@ import logging
 import streamlit as st
 
 # Load secrets into env (Streamlit Cloud deployment)
+# Bug 2 fix: original only synced 3 keys — OPENAI_API_KEY and ANTHROPIC_API_KEY
+# were never written to os.environ when using alternative providers on Streamlit Cloud.
+_ALL_SECRET_KEYS = [
+    "GEMINI_API_KEY",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "LLM_PROVIDER",
+    "LLM_MODEL",
+    "SEMANTIC_SCHOLAR_API_KEY",
+]
 try:
-    for key in ["GEMINI_API_KEY", "LLM_PROVIDER", "LLM_MODEL"]:
+    for key in _ALL_SECRET_KEYS:
         if key in st.secrets and not os.getenv(key):
             os.environ[key] = st.secrets[key]
 except Exception:
-    pass
+    pass  # Running locally without secrets.toml — fine, .env handles it
 
 import plotly.graph_objects as go
 import pandas as pd
 
-from config.settings import GRANT_AGENCIES, CITATION_STYLES
+from config.settings import GRANT_AGENCIES, CITATION_STYLES, validate_api_keys
 from core.orchestrator import ResearchOrchestrator, ResearchRequest
 from core.vector_store import collection_stats
 from utils.export import export_proposal_pdf, export_proposal_docx, export_report_markdown
@@ -356,54 +366,61 @@ step_prog = {s: i/(len(AGENT_STEPS)-1) for i,(s,_,__) in enumerate(AGENT_STEPS)}
 if run_pipeline:
     if not research_topic.strip():
         st.markdown('<div class="warn-bar">Please enter a research topic in the sidebar.</div>', unsafe_allow_html=True)
-    elif not os.getenv("GEMINI_API_KEY","").strip():
-        st.markdown('<div class="warn-bar">Gemini API key is not configured. Add it to your Streamlit secrets or .env file.</div>', unsafe_allow_html=True)
     else:
-        st.session_state.pipeline_log = []
-        st.markdown('<div class="info-bar">Pipeline running — this takes 1–3 minutes. Do not refresh the page.</div>', unsafe_allow_html=True)
+        # Bug 3 fix: original check hardcoded GEMINI_API_KEY, so switching to
+        # openai or anthropic provider let an empty key through to the agent layer,
+        # producing a cryptic LangChain auth error. validate_api_keys() checks
+        # whichever provider is currently active.
+        _key_errors = validate_api_keys()
+        if _key_errors:
+            for _err in _key_errors:
+                st.markdown(f'<div class="warn-bar">{_err}</div>', unsafe_allow_html=True)
+        else:
+            st.session_state.pipeline_log = []
+            st.markdown('<div class="info-bar">Pipeline running — this takes 1–3 minutes. Do not refresh the page.</div>', unsafe_allow_html=True)
 
-        prog_bar    = st.progress(0)
-        col_s, col_l = st.columns(2)
-        prog_status  = col_s.empty()
-        log_area     = col_l.empty()
-        agent_states = {s:"wait" for s,_,__ in AGENT_STEPS[:-1]}
+            prog_bar    = st.progress(0)
+            col_s, col_l = st.columns(2)
+            prog_status  = col_s.empty()
+            log_area     = col_l.empty()
+            agent_states = {s:"wait" for s,_,__ in AGENT_STEPS[:-1]}
 
-        def progress_cb(step, msg):
-            st.session_state.pipeline_log.append((step, msg))
-            prog_bar.progress(step_prog.get(step, 0))
-            if step in agent_states:
-                agent_states[step] = "done"
-            prog_status.markdown(
-                "<div style='font-size:.8rem;color:#1a56db;padding:.3rem 0'>"
-                "Running: " + msg + "</div>", unsafe_allow_html=True)
-            rows = ""
-            for s, lbl, desc in AGENT_STEPS[:-1]:
-                state = agent_states.get(s, "wait")
-                rows += (
-                    "<div class='step-row'>"
-                    "<span class='step-dot dot-" + state + "'></span>"
-                    "<span class='step-text-" + state + "'><b>" + lbl + "</b> — " + desc + "</span>"
-                    "</div>"
-                )
-            log_area.markdown(f"<div class='data-card' style='padding:1rem'>{rows}</div>", unsafe_allow_html=True)
+            def progress_cb(step, msg):
+                st.session_state.pipeline_log.append((step, msg))
+                prog_bar.progress(step_prog.get(step, 0))
+                if step in agent_states:
+                    agent_states[step] = "done"
+                prog_status.markdown(
+                    "<div style='font-size:.8rem;color:#1a56db;padding:.3rem 0'>"
+                    "Running: " + msg + "</div>", unsafe_allow_html=True)
+                rows = ""
+                for s, lbl, desc in AGENT_STEPS[:-1]:
+                    state = agent_states.get(s, "wait")
+                    rows += (
+                        "<div class='step-row'>"
+                        "<span class='step-dot dot-" + state + "'></span>"
+                        "<span class='step-text-" + state + "'><b>" + lbl + "</b> — " + desc + "</span>"
+                        "</div>"
+                    )
+                log_area.markdown(f"<div class='data-card' style='padding:1rem'>{rows}</div>", unsafe_allow_html=True)
 
-        request = ResearchRequest(
-            topic=research_topic, domain=domain,
-            grant_agency=grant_agency, pi_name=pi_name,
-            institution=institution, budget_total=budget_total,
-            duration_years=duration_years, citation_style=citation_style,
-            max_papers=max_papers,
-        )
-        try:
-            report = ResearchOrchestrator().run(request, progress_callback=progress_cb)
-            st.session_state.report = report
-            prog_bar.progress(1.0)
-            prog_status.markdown(
-                "<div style='font-size:.82rem;color:#166534;font-weight:600;padding:.3rem 0'>"
-                "Pipeline complete. View results below.</div>", unsafe_allow_html=True)
-        except Exception as e:
-            st.error(f"Pipeline error: {e}")
-            logger.exception(e)
+            request = ResearchRequest(
+                topic=research_topic, domain=domain,
+                grant_agency=grant_agency, pi_name=pi_name,
+                institution=institution, budget_total=budget_total,
+                duration_years=duration_years, citation_style=citation_style,
+                max_papers=max_papers,
+            )
+            try:
+                report = ResearchOrchestrator().run(request, progress_callback=progress_cb)
+                st.session_state.report = report
+                prog_bar.progress(1.0)
+                prog_status.markdown(
+                    "<div style='font-size:.82rem;color:#166534;font-weight:600;padding:.3rem 0'>"
+                    "Pipeline complete. View results below.</div>", unsafe_allow_html=True)
+            except Exception as e:
+                st.error(f"Pipeline error: {e}")
+                logger.exception(e)
 
 # ═══════════════════════════════════════════════════════════════
 # RESULTS

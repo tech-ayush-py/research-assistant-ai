@@ -9,13 +9,24 @@ from typing import List, Dict, Any
 import arxiv
 import requests
 
-from config.settings import ARXIV_MAX, S2_API_KEY
+from config.settings import ARXIV_MAX
 from core.vector_store import ingest_papers, similarity_search
 
 logger = logging.getLogger(__name__)
 
 S2_BASE = "https://api.semanticscholar.org/graph/v1"
-S2_HEADERS = {"x-api-key": S2_API_KEY} if S2_API_KEY else {}
+
+
+def _s2_headers() -> dict:
+    """
+    Build Semantic Scholar request headers at call time (not at import time).
+    Bug 6 fix: the old module-level S2_HEADERS dict was built once during import,
+    so any key injected into os.environ afterward (e.g. via Streamlit secrets) was
+    silently ignored for the entire session.
+    """
+    import os
+    key = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "").strip()
+    return {"x-api-key": key} if key else {}
 
 
 class LiteratureMiningAgent:
@@ -87,7 +98,7 @@ class LiteratureMiningAgent:
             resp = requests.get(
                 f"{S2_BASE}/paper/search",
                 params=params,
-                headers=S2_HEADERS,
+                headers=_s2_headers(),
                 timeout=15,
             )
             if resp.status_code == 200:
