@@ -66,34 +66,43 @@ class _Response:
 
 class _GeminiDirectLLM:
     """
-    Calls google-generativeai SDK directly — bypasses langchain-google-genai
-    entirely so there is no v1beta / v1 endpoint confusion.
-    Interface is identical to a LangChain chat model: .invoke(messages) -> _Response.
+    Calls google-genai SDK (the new unified SDK, package: google-genai) with
+    api_version='v1' explicitly — the stable production endpoint.
+
+    The old google-generativeai package defaulted to v1beta and reached
+    end-of-life November 2025. This class uses the replacement SDK with:
+      from google import genai
+      client = genai.Client(api_key=..., http_options={'api_version': 'v1'})
+
+    Interface: .invoke(messages) -> _Response  (same as before, no agent changes needed)
     """
     def __init__(self, model: str, api_key: str, temperature: float):
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
+        from google import genai
+        from google.genai import types
+        self._client = genai.Client(
+            api_key=api_key,
+            http_options={"api_version": "v1"},
+        )
         self._model_name = model
         self._temperature = temperature
-        self._genai = genai
+        self._types = types
 
     def invoke(self, messages) -> _Response:
-        # Convert list of LangChain message objects to a single prompt string
         parts = []
         for msg in messages:
             text = getattr(msg, "content", str(msg))
             parts.append(text)
         prompt = "\n\n".join(parts)
 
-        model = self._genai.GenerativeModel(
-            model_name=self._model_name,
-            generation_config=self._genai.types.GenerationConfig(
+        response = self._client.models.generate_content(
+            model=self._model_name,
+            contents=prompt,
+            config=self._types.GenerateContentConfig(
                 temperature=self._temperature,
                 max_output_tokens=4096,
             ),
         )
-        resp = model.generate_content(prompt)
-        return _Response(resp.text)
+        return _Response(response.text)
 
 
 def get_llm(temperature: float = 0.3):
