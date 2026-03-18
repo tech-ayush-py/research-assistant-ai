@@ -22,7 +22,7 @@ def _get_embedder() -> SentenceTransformer:
     global _embedder
     if _embedder is None:
         logger.info("Loading embedding model: %s", EMBEDDING_MODEL)
-        _embedder = SentenceTransformer(EMBEDDING_MODEL)
+        _embedder = SentenceTransformer(EMBEDDING_MODEL, device="cpu")
     return _embedder
 
 

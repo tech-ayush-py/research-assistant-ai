@@ -5,7 +5,7 @@ Computes semantic similarity of a proposed research idea against the paper corpu
 import logging
 from typing import Dict, Any, List
 
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import SentenceTransformer
 from core.vector_store import similarity_search, collection_stats
 from config.settings import EMBEDDING_MODEL
 
