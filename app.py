@@ -785,20 +785,28 @@ else:
         "<b>Run Research Pipeline</b> to begin."
         "</div>", unsafe_allow_html=True)
 
-    c1, c2, c3 = st.columns(3)
-    for col, title, body in zip([c1,c2,c3], [
+    cards = [
         ("What it does",
-         "Runs six AI agents in sequence — retrieves papers from ArXiv and Semantic Scholar, detects how the field is evolving, identifies under-explored gaps, designs an experimental methodology, writes a grant proposal, and scores the originality of the proposed work."),
+         "Runs six AI agents in sequence — retrieves papers from ArXiv and Semantic Scholar, "
+         "detects how the field is evolving, identifies under-explored gaps, "
+         "designs an experimental methodology, writes a grant proposal, "
+         "and scores the originality of the proposed work."),
         ("What you need",
-         "A research topic described in one or two sentences, and standard grant details — PI name, institution, funding agency, and budget. The Gemini API key is pre-configured and does not need to be entered."),
+         "A research topic described in one or two sentences, and standard grant details — "
+         "PI name, institution, funding agency, and budget. "
+         "The Gemini API key is pre-configured and does not need to be entered."),
         ("What you receive",
-         "A novelty score, a prioritised list of research gaps, a suggested experimental design with datasets and baselines, and a complete grant proposal ready to download as PDF, Word, or Markdown — formatted for NSF, NIH, DARPA, or EU Horizon."),
-    ]):
+         "A novelty score, a prioritised list of research gaps, a suggested experimental design "
+         "with datasets and baselines, and a complete grant proposal ready to download as "
+         "PDF, Word, or Markdown — formatted for NSF, NIH, DARPA, or EU Horizon."),
+    ]
+    c1, c2, c3 = st.columns(3)
+    for col, (title, body) in zip([c1, c2, c3], cards):
         with col:
             st.markdown(
-                f"<div class='data-card'>"
-                f"<div class='card-title'>{title}</div>"
-                f"<div style='height:3px;width:28px;background:#1a56db;"
-                f"border-radius:2px;margin:.5rem 0 .85rem'></div>"
-                f"<div style='font-size:.82rem;line-height:1.8;color:#374151'>{body}</div>"
-                f"</div>", unsafe_allow_html=True)
+                "<div class='data-card'>"
+                "<div class='card-title'>" + title + "</div>"
+                "<div style='height:3px;width:28px;background:#1a56db;"
+                "border-radius:2px;margin:.5rem 0 .85rem'></div>"
+                "<div style='font-size:.82rem;line-height:1.8;color:#374151'>" + body + "</div>"
+                "</div>", unsafe_allow_html=True)
