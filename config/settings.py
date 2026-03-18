@@ -9,7 +9,7 @@ load_dotenv()
 
 # ── LLM ────────────────────────────────────────────────────────
 LLM_PROVIDER   = os.getenv("LLM_PROVIDER", "gemini")
-LLM_MODEL      = os.getenv("LLM_MODEL", "gemini-1.5-flash")   # free-tier; SDK accepts this directly
+LLM_MODEL      = os.getenv("LLM_MODEL", "gemini-2.5-flash")   # free-tier compatible; 1000 req/day
 
 # NOTE: API keys are intentionally NOT stored as module-level constants here.
 # Reading them at import time produces stale values if secrets are injected

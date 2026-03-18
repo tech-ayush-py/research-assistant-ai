@@ -20,15 +20,20 @@ from config.settings import LLM_MODEL as _DEFAULT_MODEL
 
 logger = logging.getLogger(__name__)
 
-# gemini-2.0-* and gemini-1.5-pro require a paid account.
-# gemini-1.5-flash is the correct free-tier model.
-_GEMINI_FREE_TIER_MODEL = "gemini-1.5-flash"
+# Models that require a paid/billing-enabled account — downgrade to free tier automatically.
+# gemini-2.5-pro is intentionally NOT in this list: it has a limited free tier
+# (25 req/day, 5 RPM) and is the user-requested model.
+_GEMINI_FREE_TIER_MODEL = "gemini-2.5-flash"   # fallback if a blocked model is requested
 _GEMINI_PAID_MODELS = {
     "gemini-2.0-flash",
     "gemini-2.0-flash-001",
     "gemini-2.0-pro",
     "gemini-1.5-pro",
     "gemini-1.5-pro-001",
+    "gemini-3-flash-preview",
+    "gemini-3-pro-preview",
+    "gemini-3.1-pro-preview",
+    "gemini-3.1-flash-preview",
 }
 
 
@@ -44,9 +49,6 @@ def _require_key(env_var: str) -> str:
 
 def _resolve_gemini_model(model: str) -> str:
     """Return a free-tier compatible model name for the google-generativeai SDK."""
-    # Normalise the pinned alias back to the bare name the SDK accepts
-    if model == "gemini-1.5-flash-001":
-        return _GEMINI_FREE_TIER_MODEL
     if model in _GEMINI_PAID_MODELS:
         logger.warning(
             "Model '%s' requires a paid Google account. Falling back to '%s'.",
