@@ -796,7 +796,7 @@ Report data:
 - Recommendation: {report.novelty.get('recommendation','')}
 Be direct, concise, and reference specific data from the report."""
 
-            from core.llm_factory import get_llm
+            from core.llm_factory import get_llm, invoke_with_retry
             from langchain_core.messages import HumanMessage, SystemMessage
             try:
                 llm  = get_llm(temperature=0.4)
@@ -804,7 +804,7 @@ Be direct, concise, and reference specific data from the report."""
                         *[HumanMessage(content=m["content"]) if m["role"]=="user"
                           else type("A",(),{"content":m["content"],"type":"ai"})()
                           for m in st.session_state.chat_history[-8:]]]
-                reply = llm.invoke(msgs).content
+                reply = invoke_with_retry(llm, msgs).content
             except Exception as e:
                 reply = f"Unable to generate a response: {e}"
 

@@ -9,7 +9,7 @@ import re
 from collections import Counter
 from typing import Dict, Any, List
 
-from core.llm_factory import get_llm
+from core.llm_factory import get_llm, invoke_with_retry
 from core.vector_store import get_collection
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ No markdown, no extra text."""
 
         try:
             from langchain_core.messages import HumanMessage
-            response = llm.invoke([HumanMessage(content=prompt)])
+            response = invoke_with_retry(llm, [HumanMessage(content=prompt)])
             raw = re.sub(r"```(?:json)?|```", "", response.content).strip()
             return json.loads(raw)
         except Exception as exc:

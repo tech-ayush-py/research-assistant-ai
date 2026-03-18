@@ -2,19 +2,35 @@
 LLM factory – returns a LangChain chat model based on settings.
 Always reads env vars at call time so changes to os.environ take effect immediately.
 
-Bug fixes applied:
-  - Bug 4: default model now imported from config.settings (single source of truth)
-  - Bug 5: _require_key() raises EnvironmentError immediately on missing key,
-           instead of passing "" to LangChain and producing a cryptic auth error.
+Fixes applied:
+  - Bug 4: default model imported from config.settings (single source of truth)
+  - Bug 5: _require_key() raises EnvironmentError immediately on missing key
+  - Quota fix: gemini-2.0-flash is NOT available on the free tier and raises
+    RESOURCE_EXHAUSTED (429). Default is now gemini-1.5-flash which is free-tier
+    compatible. A _GEMINI_FREE_TIER_FALLBACK guards against any leftover
+    gemini-2.0-flash references in environment variables.
+  - Retry fix: llm_with_retry() wraps every LLM call with exponential backoff
+    for transient 429/503 errors, with a clear user-facing message on failure.
 """
 import os
+import time
+import logging
+
 from config.settings import LLM_MODEL as _DEFAULT_MODEL
+
+logger = logging.getLogger(__name__)
+
+# gemini-2.0-flash requires a paid/billing-enabled project.
+# If it is still set (e.g. leftover in secrets), silently downgrade to the
+# free-tier model so the app works without any manual config change.
+_GEMINI_FREE_TIER_FALLBACK = "gemini-1.5-flash"
+_GEMINI_PAID_MODELS = {"gemini-2.0-flash", "gemini-2.0-pro", "gemini-1.5-pro"}
 
 
 def _require_key(env_var: str) -> str:
     """
-    Return the value of env_var, stripped of whitespace.
-    Raises EnvironmentError with a clear message if the key is absent or empty.
+    Return the value of env_var stripped of whitespace.
+    Raises EnvironmentError with a clear message if absent or empty.
     """
     key = os.getenv(env_var, "").strip()
     if not key:
@@ -23,6 +39,21 @@ def _require_key(env_var: str) -> str:
             f"Add it to your .env file or Streamlit secrets and restart the app."
         )
     return key
+
+
+def _resolve_gemini_model(model: str) -> str:
+    """
+    Return a free-tier compatible Gemini model name.
+    If the user configured a paid-only model, fall back gracefully.
+    """
+    if model in _GEMINI_PAID_MODELS:
+        logger.warning(
+            "Model '%s' requires a billing-enabled Google account (RESOURCE_EXHAUSTED on free tier). "
+            "Falling back to '%s'. Set LLM_MODEL=%s in your secrets to suppress this warning.",
+            model, _GEMINI_FREE_TIER_FALLBACK, _GEMINI_FREE_TIER_FALLBACK,
+        )
+        return _GEMINI_FREE_TIER_FALLBACK
+    return model
 
 
 def get_llm(temperature: float = 0.3):
@@ -35,8 +66,9 @@ def get_llm(temperature: float = 0.3):
 
     if provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
+        safe_model = _resolve_gemini_model(model)
         return ChatGoogleGenerativeAI(
-            model=model,
+            model=safe_model,
             google_api_key=_require_key("GEMINI_API_KEY"),
             temperature=temperature,
             max_output_tokens=4096,
@@ -60,3 +92,42 @@ def get_llm(temperature: float = 0.3):
         temperature=temperature,
         max_tokens=4096,
     )
+
+
+def invoke_with_retry(llm, messages, retries: int = 3, base_delay: float = 5.0):
+    """
+    Invoke an LLM with exponential backoff for transient 429 / 503 errors.
+
+    Usage (replaces llm.invoke(messages)):
+        from core.llm_factory import get_llm, invoke_with_retry
+        response = invoke_with_retry(get_llm(), messages)
+
+    Args:
+        llm:        A LangChain chat model instance.
+        messages:   List of LangChain message objects.
+        retries:    Maximum number of retry attempts (default 3).
+        base_delay: Initial wait in seconds; doubles each retry (default 5s).
+
+    Raises:
+        The last exception if all retries are exhausted.
+    """
+    last_exc = None
+    for attempt in range(retries + 1):
+        try:
+            return llm.invoke(messages)
+        except Exception as exc:
+            err_str = str(exc).upper()
+            is_retryable = any(k in err_str for k in (
+                "429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE", "RATE_LIMIT"
+            ))
+            if is_retryable and attempt < retries:
+                wait = base_delay * (2 ** attempt)
+                logger.warning(
+                    "LLM rate-limit hit (attempt %d/%d). Retrying in %.0fs. Error: %s",
+                    attempt + 1, retries, wait, exc,
+                )
+                time.sleep(wait)
+                last_exc = exc
+            else:
+                raise
+    raise last_exc

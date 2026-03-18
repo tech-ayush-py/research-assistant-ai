@@ -8,7 +8,7 @@ import json
 import re
 from typing import Dict, Any, Optional
 
-from core.llm_factory import get_llm
+from core.llm_factory import get_llm, invoke_with_retry
 from config.settings import GRANT_AGENCIES
 
 logger = logging.getLogger(__name__)
@@ -109,7 +109,7 @@ Be specific, use academic language, and highlight innovation. Do NOT use placeho
 
         try:
             from langchain_core.messages import HumanMessage
-            response = llm.invoke([HumanMessage(content=prompt)])
+            response = invoke_with_retry(llm, [HumanMessage(content=prompt)])
             return response.content.strip()
         except Exception as exc:
             logger.warning("[GrantWriting] Section '%s' failed: %s", section, exc)

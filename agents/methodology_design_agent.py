@@ -7,7 +7,7 @@ import json
 import re
 from typing import Dict, Any
 
-from core.llm_factory import get_llm
+from core.llm_factory import get_llm, invoke_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ Respond only in JSON with those exact keys. Lists of strings for approach, basel
 
         try:
             from langchain_core.messages import HumanMessage
-            response = llm.invoke([HumanMessage(content=prompt)])
+            response = invoke_with_retry(llm, [HumanMessage(content=prompt)])
             raw = re.sub(r"```(?:json)?|```", "", response.content).strip()
             return json.loads(raw)
         except Exception as exc:
