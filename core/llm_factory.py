@@ -1,16 +1,16 @@
 """
-LLM factory – returns a LangChain chat model based on settings.
-Always reads env vars at call time so changes to os.environ take effect immediately.
+LLM factory — returns a callable LLM object for the configured provider.
 
-Fixes applied:
-  - Bug 4: default model imported from config.settings (single source of truth)
-  - Bug 5: _require_key() raises EnvironmentError immediately on missing key
-  - Quota fix: gemini-2.0-flash is NOT available on the free tier and raises
-    RESOURCE_EXHAUSTED (429). Default is now gemini-1.5-flash which is free-tier
-    compatible. A _GEMINI_FREE_TIER_FALLBACK guards against any leftover
-    gemini-2.0-flash references in environment variables.
-  - Retry fix: llm_with_retry() wraps every LLM call with exponential backoff
-    for transient 429/503 errors, with a clear user-facing message on failure.
+KEY CHANGE: For Gemini, we now call google-generativeai directly instead of
+going through langchain-google-genai. The LangChain wrapper hardcodes the
+v1beta endpoint in older releases (1.x), which rejects valid model names with
+a 404 NOT_FOUND. The google-generativeai SDK always uses the correct endpoint.
+
+The returned object exposes a single method:
+    response = llm.invoke(messages)   # messages = list of LangChain message objects
+    text = response.content           # plain string
+
+This is 100% compatible with all existing agent code — no agent changes needed.
 """
 import os
 import time
@@ -20,9 +20,9 @@ from config.settings import LLM_MODEL as _DEFAULT_MODEL
 
 logger = logging.getLogger(__name__)
 
-# Free-tier compatible model. Use the stable pinned alias (-001) which is
-# guaranteed to exist across all API versions and langchain-google-genai releases.
-_GEMINI_FREE_TIER_FALLBACK = "gemini-1.5-flash-001"
+# gemini-2.0-* and gemini-1.5-pro require a paid account.
+# gemini-1.5-flash is the correct free-tier model.
+_GEMINI_FREE_TIER_MODEL = "gemini-1.5-flash"
 _GEMINI_PAID_MODELS = {
     "gemini-2.0-flash",
     "gemini-2.0-flash-001",
@@ -33,10 +33,6 @@ _GEMINI_PAID_MODELS = {
 
 
 def _require_key(env_var: str) -> str:
-    """
-    Return the value of env_var stripped of whitespace.
-    Raises EnvironmentError with a clear message if absent or empty.
-    """
     key = os.getenv(env_var, "").strip()
     if not key:
         raise EnvironmentError(
@@ -47,42 +43,71 @@ def _require_key(env_var: str) -> str:
 
 
 def _resolve_gemini_model(model: str) -> str:
-    """
-    Return a free-tier compatible, API-version-safe Gemini model name.
-    - Paid-only models (2.0-flash, 1.5-pro, etc.) are downgraded to the free fallback.
-    - The bare alias 'gemini-1.5-flash' is normalised to 'gemini-1.5-flash-001',
-      the stable pinned version that works across all langchain-google-genai releases.
-    """
+    """Return a free-tier compatible model name for the google-generativeai SDK."""
+    # Normalise the pinned alias back to the bare name the SDK accepts
+    if model == "gemini-1.5-flash-001":
+        return _GEMINI_FREE_TIER_MODEL
     if model in _GEMINI_PAID_MODELS:
         logger.warning(
-            "Model '%s' requires a billing-enabled Google account (RESOURCE_EXHAUSTED on free tier). "
-            "Falling back to '%s'. Set LLM_MODEL=%s in your secrets to suppress this warning.",
-            model, _GEMINI_FREE_TIER_FALLBACK, _GEMINI_FREE_TIER_FALLBACK,
+            "Model '%s' requires a paid Google account. Falling back to '%s'.",
+            model, _GEMINI_FREE_TIER_MODEL,
         )
-        return _GEMINI_FREE_TIER_FALLBACK
-    # Normalise bare alias to pinned stable version
-    if model == "gemini-1.5-flash":
-        return "gemini-1.5-flash-001"
+        return _GEMINI_FREE_TIER_MODEL
     return model
+
+
+class _Response:
+    """Minimal response object — exposes .content like LangChain AIMessage."""
+    def __init__(self, text: str):
+        self.content = text
+
+
+class _GeminiDirectLLM:
+    """
+    Calls google-generativeai SDK directly — bypasses langchain-google-genai
+    entirely so there is no v1beta / v1 endpoint confusion.
+    Interface is identical to a LangChain chat model: .invoke(messages) -> _Response.
+    """
+    def __init__(self, model: str, api_key: str, temperature: float):
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        self._model_name = model
+        self._temperature = temperature
+        self._genai = genai
+
+    def invoke(self, messages) -> _Response:
+        # Convert list of LangChain message objects to a single prompt string
+        parts = []
+        for msg in messages:
+            text = getattr(msg, "content", str(msg))
+            parts.append(text)
+        prompt = "\n\n".join(parts)
+
+        model = self._genai.GenerativeModel(
+            model_name=self._model_name,
+            generation_config=self._genai.types.GenerationConfig(
+                temperature=self._temperature,
+                max_output_tokens=4096,
+            ),
+        )
+        resp = model.generate_content(prompt)
+        return _Response(resp.text)
 
 
 def get_llm(temperature: float = 0.3):
     """
-    Return a LangChain chat model for the configured LLM_PROVIDER.
-    Reads LLM_PROVIDER and LLM_MODEL from environment at call time.
+    Return an LLM object for the configured LLM_PROVIDER.
+    Always reads env vars at call time.
     """
     provider = os.getenv("LLM_PROVIDER", "gemini")
     model    = os.getenv("LLM_MODEL", _DEFAULT_MODEL)
 
     if provider == "gemini":
-        from langchain_google_genai import ChatGoogleGenerativeAI
         safe_model = _resolve_gemini_model(model)
-        return ChatGoogleGenerativeAI(
+        return _GeminiDirectLLM(
             model=safe_model,
-            google_api_key=_require_key("GEMINI_API_KEY"),
+            api_key=_require_key("GEMINI_API_KEY"),
             temperature=temperature,
-            max_output_tokens=4096,
-            convert_system_message_to_human=True,
         )
 
     if provider == "anthropic":
@@ -94,7 +119,6 @@ def get_llm(temperature: float = 0.3):
             max_tokens=4096,
         )
 
-    # Default: OpenAI
     from langchain_openai import ChatOpenAI
     return ChatOpenAI(
         model=model,
@@ -106,20 +130,7 @@ def get_llm(temperature: float = 0.3):
 
 def invoke_with_retry(llm, messages, retries: int = 3, base_delay: float = 5.0):
     """
-    Invoke an LLM with exponential backoff for transient 429 / 503 errors.
-
-    Usage (replaces llm.invoke(messages)):
-        from core.llm_factory import get_llm, invoke_with_retry
-        response = invoke_with_retry(get_llm(), messages)
-
-    Args:
-        llm:        A LangChain chat model instance.
-        messages:   List of LangChain message objects.
-        retries:    Maximum number of retry attempts (default 3).
-        base_delay: Initial wait in seconds; doubles each retry (default 5s).
-
-    Raises:
-        The last exception if all retries are exhausted.
+    Call llm.invoke(messages) with exponential backoff on 429 / 503 errors.
     """
     last_exc = None
     for attempt in range(retries + 1):
@@ -128,13 +139,13 @@ def invoke_with_retry(llm, messages, retries: int = 3, base_delay: float = 5.0):
         except Exception as exc:
             err_str = str(exc).upper()
             is_retryable = any(k in err_str for k in (
-                "429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE", "RATE_LIMIT"
+                "429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE", "RATE_LIMIT",
             ))
             if is_retryable and attempt < retries:
                 wait = base_delay * (2 ** attempt)
                 logger.warning(
-                    "LLM rate-limit hit (attempt %d/%d). Retrying in %.0fs. Error: %s",
-                    attempt + 1, retries, wait, exc,
+                    "LLM rate-limit hit (attempt %d/%d). Retrying in %.0fs.",
+                    attempt + 1, retries, wait,
                 )
                 time.sleep(wait)
                 last_exc = exc

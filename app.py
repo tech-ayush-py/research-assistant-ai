@@ -7,10 +7,8 @@ import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 
 import logging
-import google.generativeai as genai
 import streamlit as st
 
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 # Load secrets into env (Streamlit Cloud deployment)
 # Bug 2 fix: original only synced 3 keys — OPENAI_API_KEY and ANTHROPIC_API_KEY
 # were never written to os.environ when using alternative providers on Streamlit Cloud.
