@@ -374,13 +374,17 @@ if run_pipeline:
             if step in agent_states:
                 agent_states[step] = "done"
             prog_status.markdown(
-                f"<div style='font-size:.8rem;color:{\"#1a56db\" };padding:.3rem 0'>"
-                f"Running: {msg}</div>", unsafe_allow_html=True)
-            rows = "".join(
-                f"<div class='step-row'><span class='step-dot dot-{agent_states.get(s,\"wait\")}'></span>"
-                f"<span class='step-text-{agent_states.get(s,\"wait\")}'><b>{lbl}</b> — {desc}</span></div>"
-                for s, lbl, desc in AGENT_STEPS[:-1]
-            )
+                "<div style='font-size:.8rem;color:#1a56db;padding:.3rem 0'>"
+                "Running: " + msg + "</div>", unsafe_allow_html=True)
+            rows = ""
+            for s, lbl, desc in AGENT_STEPS[:-1]:
+                state = agent_states.get(s, "wait")
+                rows += (
+                    "<div class='step-row'>"
+                    "<span class='step-dot dot-" + state + "'></span>"
+                    "<span class='step-text-" + state + "'><b>" + lbl + "</b> — " + desc + "</span>"
+                    "</div>"
+                )
             log_area.markdown(f"<div class='data-card' style='padding:1rem'>{rows}</div>", unsafe_allow_html=True)
 
         request = ResearchRequest(
