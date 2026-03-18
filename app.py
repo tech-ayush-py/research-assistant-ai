@@ -40,8 +40,6 @@ except ImportError:
     def validate_api_keys() -> list:
         _key_map = {
             "gemini":    "GEMINI_API_KEY",
-            "openai":    "OPENAI_API_KEY",
-            "anthropic": "ANTHROPIC_API_KEY",
         }
         provider = _os.getenv("LLM_PROVIDER", "gemini")
         env_var  = _key_map.get(provider)
