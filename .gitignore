@@ -1,0 +1,30 @@
+# Environment
+.env
+*.env
+
+# Streamlit secrets (NEVER commit these)
+.streamlit/secrets.toml
+
+# Vector DB (large, regenerates on run)
+data/chroma_db/
+
+# Outputs
+outputs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
