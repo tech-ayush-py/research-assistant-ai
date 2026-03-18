@@ -40,7 +40,17 @@ class GrantWritingAgent:
         top_papers:        Optional[list] = None,
     ) -> Dict[str, Any]:
 
-        agency_cfg = GRANT_AGENCIES.get(agency, GRANT_AGENCIES["NSF"])
+        # Look up known agency template; fall back to a generic structure for
+        # any free-text agency the user types that isn't in GRANT_AGENCIES.
+        _generic_cfg = {
+            "sections": [
+                "Executive Summary", "Problem Statement", "Proposed Approach",
+                "Innovation & Significance", "Methodology", "Budget Justification",
+                "Expected Outcomes", "References",
+            ],
+            "style": f"{agency} grant proposal guidelines",
+        }
+        agency_cfg = GRANT_AGENCIES.get(agency, _generic_cfg)
         sections   = agency_cfg["sections"]
         style_note = agency_cfg["style"]
         logger.info("[GrantWriting] Agency: %s | Topic: %s", agency, research_topic)

@@ -350,10 +350,10 @@ with st.sidebar:
         "text-transform:uppercase;color:#6b7280;margin-bottom:10px'>Grant Proposal</div>",
         unsafe_allow_html=True,
     )
-    grant_agency   = st.selectbox("Funding Agency", list(GRANT_AGENCIES.keys()))
-    pi_name        = st.text_input("Principal Investigator", "Dr. Jane Smith")
-    institution    = st.text_input("Institution", "MIT")
-    budget_total   = st.text_input("Total Budget", "$500,000")
+    grant_agency   = st.text_input("Funding Agency", "", placeholder="e.g. NSF, NIH, DARPA, EU Horizon")
+    pi_name        = st.text_input("Principal Investigator", "")
+    institution    = st.text_input("Institution", "")
+    budget_total   = st.text_input("Total Budget", "")
     duration_years = st.number_input("Duration (years)", 1, 10, 3)
     citation_style = st.selectbox("Citation Style", CITATION_STYLES)
 
@@ -424,8 +424,9 @@ if run_pipeline:
 
             request = ResearchRequest(
                 topic=research_topic, domain=domain,
-                grant_agency=grant_agency, pi_name=pi_name,
-                institution=institution, budget_total=budget_total,
+                grant_agency=grant_agency.strip() or "General",
+                pi_name=pi_name, institution=institution,
+                budget_total=budget_total,
                 duration_years=duration_years, citation_style=citation_style,
                 max_papers=max_papers,
             )
