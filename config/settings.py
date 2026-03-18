@@ -9,7 +9,7 @@ load_dotenv()
 
 # ── LLM ────────────────────────────────────────────────────────
 LLM_PROVIDER   = os.getenv("LLM_PROVIDER", "gemini")
-LLM_MODEL      = os.getenv("LLM_MODEL", "gemini-1.5-flash")   # free-tier compatible default
+LLM_MODEL      = os.getenv("LLM_MODEL", "gemini-1.5-flash-001")   # pinned stable alias, free-tier compatible
 
 # NOTE: API keys are intentionally NOT stored as module-level constants here.
 # Reading them at import time produces stale values if secrets are injected

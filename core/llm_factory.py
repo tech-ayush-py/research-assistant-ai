@@ -20,11 +20,16 @@ from config.settings import LLM_MODEL as _DEFAULT_MODEL
 
 logger = logging.getLogger(__name__)
 
-# gemini-2.0-flash requires a paid/billing-enabled project.
-# If it is still set (e.g. leftover in secrets), silently downgrade to the
-# free-tier model so the app works without any manual config change.
-_GEMINI_FREE_TIER_FALLBACK = "gemini-1.5-flash"
-_GEMINI_PAID_MODELS = {"gemini-2.0-flash", "gemini-2.0-pro", "gemini-1.5-pro"}
+# Free-tier compatible model. Use the stable pinned alias (-001) which is
+# guaranteed to exist across all API versions and langchain-google-genai releases.
+_GEMINI_FREE_TIER_FALLBACK = "gemini-1.5-flash-001"
+_GEMINI_PAID_MODELS = {
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-001",
+    "gemini-2.0-pro",
+    "gemini-1.5-pro",
+    "gemini-1.5-pro-001",
+}
 
 
 def _require_key(env_var: str) -> str:
@@ -43,8 +48,10 @@ def _require_key(env_var: str) -> str:
 
 def _resolve_gemini_model(model: str) -> str:
     """
-    Return a free-tier compatible Gemini model name.
-    If the user configured a paid-only model, fall back gracefully.
+    Return a free-tier compatible, API-version-safe Gemini model name.
+    - Paid-only models (2.0-flash, 1.5-pro, etc.) are downgraded to the free fallback.
+    - The bare alias 'gemini-1.5-flash' is normalised to 'gemini-1.5-flash-001',
+      the stable pinned version that works across all langchain-google-genai releases.
     """
     if model in _GEMINI_PAID_MODELS:
         logger.warning(
@@ -53,6 +60,9 @@ def _resolve_gemini_model(model: str) -> str:
             model, _GEMINI_FREE_TIER_FALLBACK, _GEMINI_FREE_TIER_FALLBACK,
         )
         return _GEMINI_FREE_TIER_FALLBACK
+    # Normalise bare alias to pinned stable version
+    if model == "gemini-1.5-flash":
+        return "gemini-1.5-flash-001"
     return model
 
 
