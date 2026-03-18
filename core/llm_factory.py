@@ -21,9 +21,9 @@ from config.settings import LLM_MODEL as _DEFAULT_MODEL
 logger = logging.getLogger(__name__)
 
 # Models that require a paid/billing-enabled account — downgrade to free tier automatically.
-# NOTE: gemini-2.0-flash is deprecated (shuts down June 1, 2026) and has only 5 RPM free tier.
-# gemini-1.5-flash remains the best free-tier option (1500 RPD, 15 RPM).
-_GEMINI_FREE_TIER_MODEL = "gemini-2.0-flash"   # fallback if a blocked model is requested
+# gemini-2.5-flash-lite: stable, free-tier friendly (1000 RPD, 15 RPM), low latency.
+# Used as both the default model and the fallback for any blocked paid model.
+_GEMINI_FREE_TIER_MODEL = "gemini-2.5-flash-lite"   # fallback if a blocked model is requested
 _GEMINI_PAID_MODELS = {
     "gemini-2.0-pro",
     "gemini-1.5-pro",
