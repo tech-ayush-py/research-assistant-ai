@@ -50,7 +50,28 @@ except ImportError:
         return []
 
 from core.orchestrator import ResearchOrchestrator, ResearchRequest
-from core.vector_store import collection_stats, reset_collection
+from core.vector_store import collection_stats
+try:
+    from core.vector_store import reset_collection
+except ImportError:
+    # Fallback for partial-deploy — define inline so the app still starts
+    def reset_collection():
+        try:
+            import chromadb
+            from chromadb.config import Settings
+            from config.settings import CHROMA_DIR
+            client = chromadb.PersistentClient(
+                path=CHROMA_DIR, settings=Settings(anonymized_telemetry=False)
+            )
+            try:
+                client.delete_collection(name="research_papers")
+            except Exception:
+                pass
+            client.get_or_create_collection(
+                name="research_papers", metadata={"hnsw:space": "cosine"}
+            )
+        except Exception as _e:
+            logger.warning("reset_collection fallback failed: %s", _e)
 from utils.export import export_proposal_pdf, export_proposal_docx, export_report_markdown
 
 logging.basicConfig(level=logging.INFO)
