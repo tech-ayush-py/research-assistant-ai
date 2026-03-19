@@ -14,7 +14,7 @@ The system is deployed as an interactive web application using Streamlit and is 
 
 ## Live Demo
 
-**Deployed at:** [your-app.streamlit.app](https://your-app.streamlit.app)
+**Deployed at:** (https://research-assistant-ai-8q2pe9m99bimjejvgcpkd9.streamlit.app/)
 
 ---
 
@@ -85,17 +85,6 @@ The system is deployed as an interactive web application using Streamlit and is 
 
 ---
 
-## Supported Grant Agencies
-
-| Agency | Sections Generated |
-|--------|-------------------|
-| NSF | Project Summary, Project Description, Broader Impacts, Intellectual Merit, Budget Justification, References |
-| NIH | Specific Aims, Background & Significance, Innovation, Approach, Personnel, Budget Narrative |
-| DARPA | Technical Approach, Innovation, Team Capabilities, Risk Mitigation, Milestones, Budget |
-| EU Horizon | Excellence, Impact, Implementation, Partners, Work Packages, Budget Breakdown |
-
----
-
 ## Project Structure
 
 ```
@@ -131,52 +120,6 @@ research_assistant/
 └── data/
     └── chroma_db/                   # Persisted vector store (auto-created on first run)
 ```
-
----
-
-## Local Setup
-
-### Prerequisites
-
-- Python 3.10 or higher
-- A Gemini API key — free at [aistudio.google.com](https://aistudio.google.com)
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/YOUR_USERNAME/research-assistant-ai.git
-cd research-assistant-ai
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Open .env and set GEMINI_API_KEY=your_key_here
-
-# Run the application
-streamlit run app.py
-```
-
-Open [http://localhost:8501](http://localhost:8501) in your browser.
-
----
-
-## Deployment on Streamlit Cloud
-
-1. Push the repository to GitHub (ensure `.env` and `data/chroma_db/` are in `.gitignore`)
-2. Go to [share.streamlit.io](https://share.streamlit.io) and connect your repository
-3. Set the main file path to `app.py`
-4. Under **App Settings → Secrets**, add:
-
-```toml
-GEMINI_API_KEY = "your_api_key_here"
-LLM_PROVIDER   = "gemini"
-LLM_MODEL      = "gemini-1.5-flash"
-```
-
-5. Click **Deploy**
 
 ---
 
@@ -216,17 +159,6 @@ This project was developed as a final-year academic submission. The implementati
 | Project Report | 20% | Automated full-report Markdown/PDF export from the pipeline |
 | Viva | 40% | Each agent is independently testable; architecture is modular and clearly documented |
 | Novelty | 10% | Semantic novelty scoring agent benchmarks the proposal against 1,000+ papers |
-
----
-
-## Team
-
-| Member | Responsibility |
-|--------|---------------|
-| Member 1 | Literature Mining Agent, ChromaDB RAG layer |
-| Member 2 | Trend Analysis Agent, Gap Identification Agent |
-| Member 3 | Methodology Design Agent, Grant Writing Agent |
-| Member 4 | Streamlit Dashboard, Orchestrator, Export utilities |
 
 ---
 
