@@ -140,25 +140,10 @@ research_assistant/
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GEMINI_API_KEY` | Google Gemini API key (required) | — |
-| `LLM_PROVIDER` | LLM provider: `gemini`, `openai`, `anthropic` | `gemini` |
-| `LLM_MODEL` | Model name | `gemini-1.5-flash` |
-| `OPENAI_API_KEY` | OpenAI API key (optional fallback) | — |
-| `ANTHROPIC_API_KEY` | Anthropic API key (optional fallback) | — |
+| `LLM_PROVIDER` | LLM provider: `gemini` | `gemini` |
+| `LLM_MODEL` | Model name | `gemini-3.1-flash-lite-preview` |
 | `EMBEDDING_MODEL` | HuggingFace sentence-transformers model | `all-MiniLM-L6-v2` |
 | `CHROMA_PERSIST_DIR` | Path for ChromaDB persistence | `./data/chroma_db` |
-
----
-
-## Evaluation Criteria Mapping
-
-This project was developed as a final-year academic submission. The implementation maps to the evaluation rubric as follows:
-
-| Criterion | Weight | Implementation |
-|-----------|--------|----------------|
-| Presentation | 30% | Interactive Streamlit dashboard with live Plotly visualisations and downloadable outputs |
-| Project Report | 20% | Automated full-report Markdown/PDF export from the pipeline |
-| Viva | 40% | Each agent is independently testable; architecture is modular and clearly documented |
-| Novelty | 10% | Semantic novelty scoring agent benchmarks the proposal against 1,000+ papers |
 
 ---
 
