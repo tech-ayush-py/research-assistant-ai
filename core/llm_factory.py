@@ -20,17 +20,17 @@ from config.settings import LLM_MODEL as _DEFAULT_MODEL
 
 logger = logging.getLogger(__name__)
 
-# Models that require a paid/billing-enabled account — downgrade to free tier automatically.
-# gemini-2.5-flash-lite: stable, free-tier friendly (1000 RPD, 15 RPM), low latency.
-# Used as both the default model and the fallback for any blocked paid model.
-_GEMINI_FREE_TIER_MODEL = "gemini-2.5-flash-lite"   # fallback if a blocked model is requested
+# Models that require a paid account or are retired — downgrade to free tier automatically.
+# gemini-3.1-flash-lite-preview is the active default: free-tier, low latency, 1M context.
+_GEMINI_FREE_TIER_MODEL = "gemini-3.1-flash-lite-preview"
 _GEMINI_PAID_MODELS = {
     "gemini-2.0-pro",
     "gemini-1.5-pro",
     "gemini-1.5-pro-001",
-    "gemini-3-flash-preview",
-    "gemini-3-pro-preview",
-    "gemini-3.1-pro-preview",
+    "gemini-1.5-flash",       # retired — returns 404
+    "gemini-1.0-pro",         # retired
+    "gemini-3-pro-preview",   # shut down March 9 2026
+    "gemini-3.1-pro-preview", # paid only, no free tier
     "gemini-3.1-flash-preview",
 }
 

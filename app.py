@@ -456,21 +456,6 @@ if run_pipeline:
 # ═══════════════════════════════════════════════════════════════
 report = st.session_state.report
 
-def conf_bar(score, label="Confidence"):
-    pct   = int(score * 100)
-    color = ("#166534" if score>=.7 else "#854d0e" if score>=.4 else "#7f1d1d")
-    grade = ("High" if score>=.7 else "Moderate" if score>=.4 else "Low")
-    return (
-        f"<div class='conf-row'>"
-        f"<div class='conf-header'>"
-        f"<span class='conf-name'>{label}</span>"
-        f"<span class='conf-pct' style='color:{color}'>{grade} — {pct}%</span>"
-        f"</div>"
-        f"<div class='conf-track'>"
-        f"<div class='conf-fill' style='width:{pct}%;background:{color}'></div>"
-        f"</div></div>"
-    )
-
 if report:
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -560,19 +545,6 @@ if report:
                     )
                     st.plotly_chart(fig2, use_container_width=True)
 
-        # Confidence panel
-        st.markdown("<div class='data-card'>", unsafe_allow_html=True)
-        st.markdown('<span class="sec-label">Agent Confidence Scores</span>', unsafe_allow_html=True)
-        for lbl, sc in [
-            ("Literature Mining",   min(fetched/30, 1.0)),
-            ("Gap Identification",  report.gaps.get("novelty_score", 0.5)),
-            ("Methodology Design",  0.85 if report.methodology.get("hypothesis") else 0.4),
-            ("Grant Writing",       min(n_secs/6, 1.0)),
-            ("Novelty Scoring",     novelty),
-        ]:
-            st.markdown(conf_bar(sc, lbl), unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
         # Papers table
         if papers:
             st.markdown('<span class="sec-label">Retrieved Papers</span>', unsafe_allow_html=True)
@@ -594,10 +566,9 @@ if report:
             )
             base_c = report.gaps.get("novelty_score", 0.6)
             for i, gap in enumerate(report.gaps.get("identified_gaps", [])):
-                gc = round(min(base_c + (.04 if i%2==0 else -.04), .98), 2)
                 st.markdown(
                     f"<div class='gap-item'><div class='gap-num'>Gap {i+1}</div>"
-                    f"{gap}{conf_bar(gc,'Confidence')}</div>",
+                    f"{gap}</div>",
                     unsafe_allow_html=True,
                 )
             st.markdown("</div>", unsafe_allow_html=True)
@@ -640,7 +611,6 @@ if report:
 
             st.markdown("<div class='data-card'>", unsafe_allow_html=True)
             st.markdown('<span class="sec-label">Novelty Analysis</span>', unsafe_allow_html=True)
-            st.markdown(conf_bar(novelty, "Overall Novelty"), unsafe_allow_html=True)
             st.markdown(
                 f"<div style='font-size:.75rem;color:#374151;margin-top:6px'>"
                 f"Rating: <b style='color:#1a56db'>"
@@ -696,8 +666,6 @@ if report:
             st.markdown('<span class="sec-label">Evaluation Metrics</span>', unsafe_allow_html=True)
             for m in report.methodology.get("evaluation_metrics",[]):
                 st.markdown(f"<span class='pill pill-slate'>{m}</span>", unsafe_allow_html=True)
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown(conf_bar(0.85 if hyp else 0.4, "Methodology Confidence"), unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
         if report.methodology.get("expected_outcomes"):
@@ -722,7 +690,11 @@ if report:
             f"</div>", unsafe_allow_html=True)
 
         n_secs = len(report.grant.get("sections",{}))
-        st.markdown(conf_bar(min(n_secs/6,1.0), f"Completeness — {n_secs} sections generated"), unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='font-size:.8rem;color:#374151;margin-bottom:1rem'>"
+            f"{n_secs} sections generated</div>",
+            unsafe_allow_html=True,
+        )
 
         for section, content in report.grant.get("sections",{}).items():
             with st.expander(section):
