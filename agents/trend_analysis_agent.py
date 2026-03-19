@@ -63,11 +63,13 @@ class TrendAnalysisAgent:
     def _extract_topics_llm(self, topic, docs):
         llm = get_llm(temperature=0.2)
         corpus_sample = "\n---\n".join(docs[:20])
-        prompt = f"""You are a research trend analyst.
+        prompt = f"""You are a research trend analyst working across all academic disciplines.
 Given these paper abstracts about "{topic}", identify:
-1. 3-5 EMERGING sub-topics (gaining traction recently)
-2. 2-3 DECLINING sub-topics (less common in recent work)
+1. 3-5 EMERGING sub-topics or approaches (gaining traction in recent publications)
+2. 2-3 DECLINING sub-topics or approaches (less common in recent work)
 3. A 2-paragraph trend summary of where the field is heading.
+
+Important: analyse the trends in terms natural to the discipline — theoretical shifts, methodological turns, new geographic or demographic foci, emerging frameworks, etc. Do not impose computational or ML framing unless the topic is explicitly technical.
 
 Abstracts:
 {corpus_sample}

@@ -633,40 +633,42 @@ if report:
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("<div class='data-card'>", unsafe_allow_html=True)
-            st.markdown('<span class="sec-label">Experimental Approach</span>', unsafe_allow_html=True)
+            st.markdown('<span class="sec-label">Research Approach</span>', unsafe_allow_html=True)
             for i, step in enumerate(report.methodology.get("approach",[]), 1):
                 st.markdown(
                     f"<div class='approach-step'><span class='step-num'>{i:02d}.</span>"
                     f"<span>{step}</span></div>", unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
-            st.markdown("<div class='data-card'>", unsafe_allow_html=True)
-            st.markdown('<span class="sec-label">Recommended Datasets</span>', unsafe_allow_html=True)
-            for ds in report.methodology.get("suggested_datasets",[]):
-                st.markdown(f"<span class='pill pill-blue'>{ds}</span>", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+            if report.methodology.get("suggested_datasets"):
+                st.markdown("<div class='data-card'>", unsafe_allow_html=True)
+                st.markdown('<span class="sec-label">Data Sources</span>', unsafe_allow_html=True)
+                for ds in report.methodology.get("suggested_datasets",[]):
+                    st.markdown(f"<span class='pill pill-blue'>{ds}</span>", unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
 
         with col2:
             st.markdown("<div class='data-card'>", unsafe_allow_html=True)
-            st.markdown('<span class="sec-label">Baseline Comparisons</span>', unsafe_allow_html=True)
+            st.markdown('<span class="sec-label">Comparators & Prior Work</span>', unsafe_allow_html=True)
             st.markdown(
                 "<div style='font-size:.75rem;color:#374151;margin-bottom:10px'>"
-                "Existing approaches your work should be benchmarked against.</div>",
+                "Existing studies, frameworks, or theories this work engages with.</div>",
                 unsafe_allow_html=True,
             )
             for bl in report.methodology.get("baselines",[]):
                 st.markdown(
-                    f"<div style='font-family:IBM Plex Mono,monospace;font-size:.78rem;"
+                    f"<div style='font-size:.83rem;"
                     f"color:#1e293b;padding:.3rem .7rem;margin:.25rem 0;"
                     f"border:1px solid #e2e8f0;border-radius:4px;background:#f8fafc'>"
                     f"{bl}</div>", unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
-            st.markdown("<div class='data-card'>", unsafe_allow_html=True)
-            st.markdown('<span class="sec-label">Evaluation Metrics</span>', unsafe_allow_html=True)
-            for m in report.methodology.get("evaluation_metrics",[]):
-                st.markdown(f"<span class='pill pill-slate'>{m}</span>", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+            if report.methodology.get("evaluation_metrics"):
+                st.markdown("<div class='data-card'>", unsafe_allow_html=True)
+                st.markdown('<span class="sec-label">Evaluation Criteria</span>', unsafe_allow_html=True)
+                for m in report.methodology.get("evaluation_metrics",[]):
+                    st.markdown(f"<span class='pill pill-slate'>{m}</span>", unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
 
         if report.methodology.get("expected_outcomes"):
             st.markdown("<div class='data-card'>", unsafe_allow_html=True)

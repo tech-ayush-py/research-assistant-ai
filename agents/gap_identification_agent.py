@@ -59,7 +59,7 @@ class GapIdentificationAgent:
             for p in papers[:15]
         )
 
-        prompt = f"""You are an expert academic researcher identifying knowledge gaps.
+        prompt = f"""You are an expert academic researcher identifying knowledge gaps. Your analysis must be appropriate for the specific academic discipline of the research topic — do not assume a computational or technical framing unless the topic is explicitly technical.
 
 Research Topic: "{topic}"
 
@@ -67,9 +67,9 @@ Here are the most relevant existing papers:
 {paper_summaries}
 
 Based on these papers, identify:
-1. RESEARCH GAPS: 4-6 specific, concrete areas that are under-explored or completely missing
-2. OPPORTUNITY AREAS: 3-4 promising directions where new research could have high impact
-3. REASONING: A concise paragraph explaining your gap analysis methodology
+1. RESEARCH GAPS: 4-6 specific, concrete areas that are under-explored or completely missing in the existing literature. Frame these in terms natural to the discipline (e.g. archival gaps, theoretical gaps, methodological gaps, geographic gaps, temporal gaps — not just "lack of datasets" or "no ML model").
+2. OPPORTUNITY AREAS: 3-4 promising directions where new research could have high scholarly impact.
+3. REASONING: A concise paragraph explaining your gap analysis approach.
 
 Respond in JSON with keys: gaps (list of strings), opportunities (list of strings), reasoning (string)"""
 

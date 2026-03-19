@@ -115,7 +115,12 @@ Key references from literature:
 {paper_refs}
 
 Write a compelling, detailed "{section}" section (300-500 words) following {ctx['agency']} guidelines.
-Be specific, use academic language, and highlight innovation. Do NOT use placeholder text."""
+
+Critical instructions:
+- Match the academic register and methodology to the actual discipline of the research topic. If this is a humanities, social science, or interdisciplinary topic, use appropriate scholarly language — do NOT impose computational or ML framing.
+- Be specific and grounded in the research topic. Do NOT use generic placeholder text.
+- Use academic language appropriate to the field.
+- Highlight the scholarly significance and originality of the work."""
 
         try:
             from langchain_core.messages import HumanMessage
