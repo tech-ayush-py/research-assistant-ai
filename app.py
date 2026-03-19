@@ -331,7 +331,6 @@ st.markdown("""
         <span class="page-pill">6 AI Agents</span>
         <span class="page-pill">ArXiv + Semantic Scholar</span>
         <span class="page-pill">ChromaDB RAG</span>
-        <span class="page-pill">NSF / NIH / DARPA / EU Horizon</span>
         <span class="page-pill">Powered by Gemini</span>
     </div>
 </div>
