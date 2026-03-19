@@ -50,7 +50,7 @@ except ImportError:
         return []
 
 from core.orchestrator import ResearchOrchestrator, ResearchRequest
-from core.vector_store import collection_stats
+from core.vector_store import collection_stats, reset_collection
 from utils.export import export_proposal_pdf, export_proposal_docx, export_report_markdown
 
 logging.basicConfig(level=logging.INFO)
@@ -335,25 +335,39 @@ with st.sidebar:
         height=100,
     )
     domain = st.selectbox("Research Domain", [
-        # Technical / STEM
-        "General AI", "NLP", "Computer Vision", "Biomedical",
-        "Graph / Network", "Multimodal", "Reinforcement Learning",
-        "Robotics", "Security",
-        # Humanities
-        "History", "Literature & Cultural Studies", "Philosophy",
-        "Linguistics", "Art History & Archaeology",
-        "Religion & Theology",
+        # Sciences
+        "General AI / Machine Learning",
+        "Natural Language Processing (NLP)",
+        "Computer Vision",
+        "Robotics",
+        "Cybersecurity",
+        "Data Science",
+        # Life & Health Sciences
+        "Biomedical / Medicine",
+        "Public Health",
+        "Neuroscience",
+        "Environmental Science",
+        "Physics / Chemistry",
         # Social Sciences
-        "Economics", "Political Science", "Sociology",
-        "Psychology", "Education", "Law & Policy",
-        "Anthropology",
-        # Natural / Physical Sciences
-        "Physics", "Chemistry", "Environmental Science",
-        "Biology & Ecology",
+        "Psychology",
+        "Sociology",
+        "Economics",
+        "Political Science",
+        "Education",
+        "Social Work",
+        # Humanities
+        "History",
+        "Literature & Linguistics",
+        "Philosophy",
+        "Cultural Studies / Gender Studies",
+        "Art History & Archaeology",
+        "Media & Communication",
+        "Law",
         # Business
-        "Business & Management", "Finance",
-        # Other
-        "Other",
+        "Business / Management",
+        "Finance",
+        # Interdisciplinary
+        "Interdisciplinary / Other",
     ])
     max_papers = st.slider("Papers to retrieve", 10, 80, 25,
                            help="More papers improve analysis quality but increase runtime.")
@@ -412,6 +426,10 @@ if run_pipeline:
         else:
             st.session_state.pipeline_log = []
             st.markdown('<div class="info-bar">Pipeline running — this takes 1–3 minutes. Do not refresh the page.</div>', unsafe_allow_html=True)
+
+            # Clear the corpus from any previous run so papers from a different
+            # topic (e.g. robotics) do not contaminate results for the new topic.
+            reset_collection()
 
             prog_bar    = st.progress(0)
             col_s, col_l = st.columns(2)

@@ -109,6 +109,25 @@ def similarity_search(
     return output
 
 
+def reset_collection(collection_name: str = "research_papers") -> None:
+    """
+    Delete and recreate the collection, clearing all previously ingested papers.
+    Called at the start of each pipeline run to prevent papers from a previous
+    topic (e.g. swarm robotics) from contaminating results for a new topic
+    (e.g. women in espionage history).
+    """
+    client = _get_client()
+    try:
+        client.delete_collection(name=collection_name)
+        logger.info("Cleared collection '%s' for fresh pipeline run.", collection_name)
+    except Exception:
+        pass  # collection may not exist yet on first run
+    client.get_or_create_collection(
+        name=collection_name,
+        metadata={"hnsw:space": "cosine"},
+    )
+
+
 def collection_stats(collection_name: str = "research_papers") -> Dict[str, Any]:
     col = get_collection(collection_name)
     return {"collection": collection_name, "total_papers": col.count()}

@@ -85,10 +85,7 @@ class ResearchOrchestrator:
         # ── Step 2: Trend Analysis ─────────────────────────────
         _cb("trends", "Analysing research trends…")
         try:
-            report.trends = self.agents["trends"].run(
-                topic=request.topic,
-                domain=request.domain,
-            )
+            report.trends = self.agents["trends"].run(topic=request.topic)
         except Exception as e:
             report.errors.append(f"Trend Analysis: {e}")
             report.trends = {"error": str(e)}

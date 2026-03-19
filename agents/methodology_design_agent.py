@@ -18,70 +18,71 @@ logger = logging.getLogger(__name__)
 
 _DISCIPLINE_MAP = {
     # Computational / Engineering
-    "nlp":              "computational",
-    "computer vision":  "computational",
-    "machine learning": "computational",
-    "deep learning":    "computational",
-    "robotics":         "computational",
-    "reinforcement":    "computational",
-    "multimodal":       "computational",
-    "graph":            "computational",
-    "network":          "computational",
-    "security":         "computational",
-    "general ai":       "computational",
+    "nlp":                  "computational",
+    "natural language":     "computational",
+    "computer vision":      "computational",
+    "machine learning":     "computational",
+    "deep learning":        "computational",
+    "general ai":           "computational",
+    "data science":         "computational",
+    "robotics":             "computational",
+    "reinforcement":        "computational",
+    "multimodal":           "computational",
+    "graph":                "computational",
+    "network":              "computational",
+    "cybersecurity":        "computational",
+    "security":             "computational",
     # Life & Health Sciences
-    "biomedical":       "life_science",
-    "biology":          "life_science",
-    "biology & ecology": "life_science",
-    "medicine":         "life_science",
-    "health":           "life_science",
-    "clinical":         "life_science",
-    "genomics":         "life_science",
-    "neuroscience":     "life_science",
+    "biomedical":           "life_science",
+    "medicine":             "life_science",
+    "biology":              "life_science",
+    "health":               "life_science",
+    "clinical":             "life_science",
+    "genomics":             "life_science",
+    "neuroscience":         "life_science",
+    "environmental":        "life_science",
+    "physics":              "physical_science",
+    "chemistry":            "physical_science",
+    "materials":            "physical_science",
     # Social Sciences
-    "social":           "social_science",
-    "economics":        "social_science",
-    "finance":          "social_science",
-    "psychology":       "social_science",
-    "political":        "social_science",
-    "political science": "social_science",
-    "sociology":        "social_science",
-    "education":        "social_science",
-    "public policy":    "social_science",
-    "law & policy":     "social_science",
-    "law":              "social_science",
-    "anthropology":     "social_science",
+    "social":               "social_science",
+    "economics":            "social_science",
+    "psychology":           "social_science",
+    "political":            "social_science",
+    "sociology":            "social_science",
+    "education":            "social_science",
+    "public policy":        "social_science",
+    "public health":        "social_science",
+    "social work":          "social_science",
     # Humanities
-    "history":          "humanities",
-    "literature":       "humanities",
-    "literature & cultural studies": "humanities",
-    "philosophy":       "humanities",
-    "linguistics":      "humanities",
-    "cultural":         "humanities",
-    "gender":           "humanities",
-    "art history":      "humanities",
-    "art history & archaeology": "humanities",
-    "film":             "humanities",
-    "media":            "humanities",
-    "espionage":        "humanities",
-    "intelligence":     "humanities",
-    "religion":         "humanities",
-    "religion & theology": "humanities",
-    "theology":         "humanities",
-    # Physical Sciences
-    "physics":          "physical_science",
-    "chemistry":        "physical_science",
-    "materials":        "physical_science",
-    "engineering":      "physical_science",
-    "environmental":    "physical_science",
-    "environmental science": "physical_science",
-    "climate":          "physical_science",
+    "history":              "humanities",
+    "literature":           "humanities",
+    "linguistics":          "humanities",
+    "philosophy":           "humanities",
+    "cultural":             "humanities",
+    "gender":               "humanities",
+    "anthropology":         "humanities",
+    "art history":          "humanities",
+    "archaeology":          "humanities",
+    "art":                  "humanities",
+    "film":                 "humanities",
+    "law":                  "humanities",
+    "legal":                "humanities",
+    "media":                "humanities",
+    "communication":        "humanities",
+    "espionage":            "humanities",
+    "intelligence":         "humanities",
+    "war":                  "humanities",
+    "colonial":             "humanities",
+    "resistance":           "humanities",
+    "women":                "humanities",
+    "gender studies":       "humanities",
     # Business / Management
-    "business":         "business",
-    "business & management": "business",
-    "management":       "business",
-    "marketing":        "business",
-    "entrepreneurship": "business",
+    "business":             "business",
+    "management":           "business",
+    "finance":              "business",
+    "marketing":            "business",
+    "entrepreneurship":     "business",
 }
 
 # ── Data source registries by discipline ──────────────────────────────────────
@@ -185,57 +186,14 @@ _EVAL_CRITERIA = {
 def _classify_discipline(domain: str, topic: str = "") -> str:
     """
     Return the broad discipline family for a given domain string and topic.
-
-    Strategy:
-    1. First try the existing keyword map against the combined domain+topic string.
-    2. If still unresolved, run an extended topic-text scan with a richer
-       humanities / social-science keyword set — this catches cases where the
-       user has selected 'Other' for a history or literature topic.
-    3. Fall back to 'general' only if genuinely ambiguous.
+    Matches the longest keyword first so specific terms (e.g. 'art history')
+    beat shorter ambiguous ones (e.g. 'art' or 'social').
     """
     combined = (domain + " " + topic).lower()
-
-    # Pass 1 — existing keyword map
-    for keyword, discipline in _DISCIPLINE_MAP.items():
+    # Sort by keyword length descending so more specific terms win
+    for keyword, discipline in sorted(_DISCIPLINE_MAP.items(), key=lambda x: -len(x[0])):
         if keyword in combined:
             return discipline
-
-    # Pass 2 — extended scan for topics that commonly get 'Other' as domain
-    _EXTENDED = {
-        # Humanities
-        "histor": "humanities", "archiv": "humanities", "medieval": "humanities",
-        "ancient": "humanities", "colonial": "humanities", "postcolonial": "humanities",
-        "dynasty": "humanities", "empire": "humanities", "war": "humanities",
-        "revolution": "humanities", "propaganda": "humanities",
-        "espionage": "humanities", "cold war": "humanities",
-        "novel": "humanities", "poetr": "humanities", "fiction": "humanities",
-        "narrativ": "humanities", "literary": "humanities",
-        "museum": "humanities", "archaeolog": "humanities",
-        "theology": "humanities", "religion": "humanities",
-        "diplomat": "humanities", "geopolit": "humanities",
-        # Social Sciences
-        "sociolog": "social_science", "feminism": "social_science",
-        "gender stud": "social_science", "labour market": "social_science",
-        "fiscal": "social_science", "monetary policy": "social_science",
-        "pedagog": "social_science", "curriculum": "social_science",
-        "jurisprudence": "social_science", "constitutional law": "social_science",
-        "ethnograph": "social_science", "migration": "social_science",
-        "poverty": "social_science", "inequality": "social_science",
-        "governance": "social_science",
-        # Life Sciences
-        "epidemiolog": "life_science", "virology": "life_science",
-        "oncolog": "life_science", "pharmacolog": "life_science",
-        "patholog": "life_science", "immunolog": "life_science",
-        "ecology": "life_science", "evolution": "life_science",
-        # Physical Sciences
-        "astrophys": "physical_science", "geolog": "physical_science",
-        "meteorolog": "physical_science", "oceanograph": "physical_science",
-        "thermodynam": "physical_science", "electromagnetism": "physical_science",
-    }
-    for keyword, discipline in _EXTENDED.items():
-        if keyword in combined:
-            return discipline
-
     return "general"
 
 
@@ -292,38 +250,14 @@ class MethodologyDesignAgent:
         }
         hint = framing_hints.get(discipline, framing_hints["general"])
 
-        # Build a plain-English label for the discipline so the prompt is unambiguous
-        _DISCIPLINE_LABELS = {
-            "computational":  "computational / AI / engineering",
-            "life_science":   "biomedical / life science",
-            "social_science": "social science",
-            "humanities":     "humanities (history, literature, philosophy, cultural studies, etc.)",
-            "physical_science": "physical science",
-            "business":       "business / management",
-            "general":        "academic research (discipline inferred from topic)",
-        }
-        discipline_label = _DISCIPLINE_LABELS.get(discipline, discipline)
-
-        # Hard prohibition on ML language for non-computational disciplines
-        ml_prohibition = ""
-        if discipline not in ("computational", "general"):
-            ml_prohibition = (
-                "\n\nSTRICT PROHIBITION: This is NOT a computational or AI project. "
-                "Do NOT mention machine learning, neural networks, LLMs, transformers, "
-                "datasets, benchmarks, GPU, training, inference, accuracy/F1, or any "
-                "other AI/CS terminology. Use only methods, sources, and evaluation "
-                "criteria appropriate for " + discipline_label + "."
-            )
-
-        prompt = f"""You are a senior academic research methodologist specialising in {discipline_label}.
-Design a rigorous methodology for the following research gap.
+        prompt = f"""You are a senior academic research methodologist. Design a rigorous methodology for the following research gap.
 
 Research Gap: "{gap}"
 Academic Domain: {domain}
-Discipline Family: {discipline_label}
-Methodological Framing: {hint}{ml_prohibition}
+Discipline Family: {discipline}
+Methodological Framing: {hint}
 
-Produce a methodology appropriate for this SPECIFIC discipline.
+Produce a methodology appropriate for this SPECIFIC discipline. Do NOT default to machine learning, neural networks, or computational benchmarks unless the domain explicitly requires them.
 
 Return ONLY valid JSON with these exact keys:
 {{
@@ -334,9 +268,9 @@ Return ONLY valid JSON with these exact keys:
   "outcomes": ["Expected contribution 1", "Expected contribution 2", "Expected contribution 3"]
 }}
 
-- approach: 5-7 concrete, discipline-appropriate steps (e.g. archival research, interviews, surveys, experiments, close reading — NOT neural network training)
-- comparators: 3-5 existing works, frameworks, or theories this study will benchmark or dialogue with (for humanities: cite historiographical traditions, theoretical frameworks, or seminal works — NOT ML model names)
-- timeline: 3-5 research phases with week ranges appropriate for the discipline
+- approach: 5-7 concrete, discipline-appropriate steps
+- comparators: 3-5 existing works, frameworks, or theories this study will benchmark or dialogue with (NOT ML model names for non-technical fields)
+- timeline: 3-5 research phases with week ranges
 - outcomes: 3-4 scholarly contributions this research will make
 
 Respond with ONLY the JSON object. No preamble, no markdown fences."""
