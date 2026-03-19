@@ -65,12 +65,12 @@ class _Response:
 class _GeminiDirectLLM:
     """
     Calls google-genai SDK (the new unified SDK, package: google-genai) with
-    api_version='v1' explicitly — the stable production endpoint.
+    api_version='v1beta' — required for preview models like gemini-3.1-flash-lite-preview.
 
-    The old google-generativeai package defaulted to v1beta and reached
-    end-of-life November 2025. This class uses the replacement SDK with:
+    The old google-generativeai package reached end-of-life November 2025.
+    This class uses the replacement SDK with:
       from google import genai
-      client = genai.Client(api_key=..., http_options={'api_version': 'v1'})
+      client = genai.Client(api_key=..., http_options={'api_version': 'v1beta'})
 
     Interface: .invoke(messages) -> _Response  (same as before, no agent changes needed)
     """
@@ -79,7 +79,7 @@ class _GeminiDirectLLM:
         from google.genai import types
         self._client = genai.Client(
             api_key=api_key,
-            http_options={"api_version": "v1"},
+            http_options={"api_version": "v1beta"},
         )
         self._model_name = model
         self._temperature = temperature
