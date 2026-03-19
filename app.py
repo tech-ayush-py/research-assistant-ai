@@ -335,9 +335,25 @@ with st.sidebar:
         height=100,
     )
     domain = st.selectbox("Research Domain", [
+        # Technical / STEM
         "General AI", "NLP", "Computer Vision", "Biomedical",
         "Graph / Network", "Multimodal", "Reinforcement Learning",
-        "Robotics", "Security", "Other",
+        "Robotics", "Security",
+        # Humanities
+        "History", "Literature & Cultural Studies", "Philosophy",
+        "Linguistics", "Art History & Archaeology",
+        "Religion & Theology",
+        # Social Sciences
+        "Economics", "Political Science", "Sociology",
+        "Psychology", "Education", "Law & Policy",
+        "Anthropology",
+        # Natural / Physical Sciences
+        "Physics", "Chemistry", "Environmental Science",
+        "Biology & Ecology",
+        # Business
+        "Business & Management", "Finance",
+        # Other
+        "Other",
     ])
     max_papers = st.slider("Papers to retrieve", 10, 80, 25,
                            help="More papers improve analysis quality but increase runtime.")
