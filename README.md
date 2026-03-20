@@ -138,10 +138,8 @@ research_assistant/
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `GEMINI_API_KEY` | Google Gemini API key (required) | — |
-| `LLM_PROVIDER` | LLM provider: `gemini`, `openai`, `anthropic` | `gemini` |
-| `LLM_MODEL` | Model name | `gemini-1.5-flash` |
-| `OPENAI_API_KEY` | OpenAI API key (optional fallback) | — |
-| `ANTHROPIC_API_KEY` | Anthropic API key (optional fallback) | — |
+| `LLM_PROVIDER` | LLM provider: `gemini` | `gemini` |
+| `LLM_MODEL` | Model name | `gemini-3.1-flash-lite-preview` |
 | `EMBEDDING_MODEL` | HuggingFace sentence-transformers model | `all-MiniLM-L6-v2` |
 | `CHROMA_PERSIST_DIR` | Path for ChromaDB persistence | `./data/chroma_db` |
 
