@@ -51,27 +51,6 @@ except ImportError:
 
 from core.orchestrator import ResearchOrchestrator, ResearchRequest
 from core.vector_store import collection_stats
-try:
-    from core.vector_store import reset_collection
-except ImportError:
-    # Fallback for partial-deploy — define inline so the app still starts
-    def reset_collection():
-        try:
-            import chromadb
-            from chromadb.config import Settings
-            from config.settings import CHROMA_DIR
-            client = chromadb.PersistentClient(
-                path=CHROMA_DIR, settings=Settings(anonymized_telemetry=False)
-            )
-            try:
-                client.delete_collection(name="research_papers")
-            except Exception:
-                pass
-            client.get_or_create_collection(
-                name="research_papers", metadata={"hnsw:space": "cosine"}
-            )
-        except Exception as _e:
-            logger.warning("reset_collection fallback failed: %s", _e)
 from utils.export import export_proposal_pdf, export_proposal_docx, export_report_markdown
 
 logging.basicConfig(level=logging.INFO)
@@ -331,6 +310,7 @@ st.markdown("""
         <span class="page-pill">6 AI Agents</span>
         <span class="page-pill">ArXiv + Semantic Scholar</span>
         <span class="page-pill">ChromaDB RAG</span>
+        <span class="page-pill">NSF / NIH / DARPA / EU Horizon</span>
         <span class="page-pill">Powered by Gemini</span>
     </div>
 </div>
@@ -355,39 +335,25 @@ with st.sidebar:
         height=100,
     )
     domain = st.selectbox("Research Domain", [
-        # Sciences
-        "General AI / Machine Learning",
-        "Natural Language Processing (NLP)",
-        "Computer Vision",
-        "Robotics",
-        "Cybersecurity",
-        "Data Science",
-        # Life & Health Sciences
-        "Biomedical / Medicine",
-        "Public Health",
-        "Neuroscience",
-        "Environmental Science",
-        "Physics / Chemistry",
-        # Social Sciences
-        "Psychology",
-        "Sociology",
-        "Economics",
-        "Political Science",
-        "Education",
-        "Social Work",
+        # Technical / STEM
+        "General AI", "NLP", "Computer Vision", "Biomedical",
+        "Graph / Network", "Multimodal", "Reinforcement Learning",
+        "Robotics", "Security",
         # Humanities
-        "History",
-        "Literature & Linguistics",
-        "Philosophy",
-        "Cultural Studies / Gender Studies",
-        "Art History & Archaeology",
-        "Media & Communication",
-        "Law",
+        "History", "Literature & Cultural Studies", "Philosophy",
+        "Linguistics", "Art History & Archaeology",
+        "Religion & Theology",
+        # Social Sciences
+        "Economics", "Political Science", "Sociology",
+        "Psychology", "Education", "Law & Policy",
+        "Anthropology",
+        # Natural / Physical Sciences
+        "Physics", "Chemistry", "Environmental Science",
+        "Biology & Ecology",
         # Business
-        "Business / Management",
-        "Finance",
-        # Interdisciplinary
-        "Interdisciplinary / Other",
+        "Business & Management", "Finance",
+        # Other
+        "Other",
     ])
     max_papers = st.slider("Papers to retrieve", 10, 80, 25,
                            help="More papers improve analysis quality but increase runtime.")
@@ -446,10 +412,6 @@ if run_pipeline:
         else:
             st.session_state.pipeline_log = []
             st.markdown('<div class="info-bar">Pipeline running — this takes 1–3 minutes. Do not refresh the page.</div>', unsafe_allow_html=True)
-
-            # Clear the corpus from any previous run so papers from a different
-            # topic (e.g. robotics) do not contaminate results for the new topic.
-            reset_collection()
 
             prog_bar    = st.progress(0)
             col_s, col_l = st.columns(2)
@@ -602,8 +564,18 @@ if report:
         # Papers table
         if papers:
             st.markdown('<span class="sec-label">Retrieved Papers</span>', unsafe_allow_html=True)
-            df_show = pd.DataFrame(papers)[["title","year","authors","source","similarity"]].head(12)
-            df_show.columns = ["Title","Year","Authors","Source","Relevance"]
+            df_raw = pd.DataFrame(papers)
+            display_cols = ["title", "year", "authors", "source"]
+            rename_map   = {"title": "Title", "year": "Year", "authors": "Authors", "source": "Source"}
+            if "citation_count" in df_raw.columns:
+                display_cols += ["citation_count", "influential_citation_count"]
+                rename_map["citation_count"]             = "Citations"
+                rename_map["influential_citation_count"] = "Influential Cites"
+            for col, label in [("credibility","Credibility"), ("similarity","Relevance"), ("final_score","Score")]:
+                if col in df_raw.columns:
+                    display_cols.append(col)
+                    rename_map[col] = label
+            df_show = df_raw[[c for c in display_cols if c in df_raw.columns]].head(12).rename(columns=rename_map)
             st.dataframe(df_show, use_container_width=True, height=280)
 
     # ── GAPS & TRENDS ─────────────────────────────────────────
@@ -615,14 +587,59 @@ if report:
             st.markdown('<span class="sec-label">Research Gaps</span>', unsafe_allow_html=True)
             st.markdown(
                 "<div style='font-size:.78rem;color:#374151;margin-bottom:12px;line-height:1.6'>"
-                "Areas identified as under-explored in the existing literature.</div>",
+                "Areas identified as under-explored. Each gap is verified against the corpus "
+                "and reviewed by a second AI pass for correctness.</div>",
                 unsafe_allow_html=True,
             )
-            base_c = report.gaps.get("novelty_score", 0.6)
-            for i, gap in enumerate(report.gaps.get("identified_gaps", [])):
+
+            _CONF_COLORS = {
+                "high":   ("#166534", "#dcfce7", "#bbf7d0"),  # text, bg, border
+                "medium": ("#92400e", "#fef3c7", "#fde68a"),
+                "low":    ("#991b1b", "#fee2e2", "#fecaca"),
+            }
+
+            # Use verified_gaps if available (has confidence + notes), else fall back
+            verified = report.gaps.get("verified_gaps") or [
+                {"gap": g, "confidence": "medium", "verification_note": "", "conflicting_paper": None}
+                for g in report.gaps.get("identified_gaps", [])
+            ]
+
+            for i, vg in enumerate(verified):
+                conf   = vg.get("confidence", "medium")
+                colors = _CONF_COLORS.get(conf, _CONF_COLORS["medium"])
+                note   = vg.get("verification_note", "")
+                conflict = vg.get("conflicting_paper")
+
+                conf_badge = (
+                    f"<span style='font-size:.62rem;font-weight:700;letter-spacing:.08em;"
+                    f"text-transform:uppercase;color:{colors[0]};background:{colors[1]};"
+                    f"border:1px solid {colors[2]};padding:2px 8px;border-radius:3px;"
+                    f"margin-left:8px'>{conf} confidence</span>"
+                )
+
+                conflict_html = ""
+                if conflict:
+                    conflict_html = (
+                        f"<div style='font-size:.72rem;color:#7f1d1d;margin-top:5px;"
+                        f"padding:4px 8px;background:#fee2e2;border-radius:4px;'>"
+                        f"⚠️ Possible overlap: <i>{conflict['title']}</i> ({conflict['year']}, "
+                        f"similarity {conflict['similarity']:.2f})</div>"
+                    )
+
+                note_html = ""
+                if note:
+                    note_html = (
+                        f"<div style='font-size:.74rem;color:#374151;margin-top:6px;"
+                        f"font-style:italic;line-height:1.5'>{note}</div>"
+                    )
+
                 st.markdown(
-                    f"<div class='gap-item'><div class='gap-num'>Gap {i+1}</div>"
-                    f"{gap}</div>",
+                    f"<div class='gap-item'>"
+                    f"<div class='gap-num' style='display:flex;align-items:center'>"
+                    f"Gap {i+1}{conf_badge}</div>"
+                    f"<div style='margin-top:4px'>{vg['gap']}</div>"
+                    f"{conflict_html}{note_html}"
+                    f"</div>",
                     unsafe_allow_html=True,
                 )
             st.markdown("</div>", unsafe_allow_html=True)
