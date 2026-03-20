@@ -47,8 +47,7 @@ def get_collection(name: str = "research_papers"):
 def ingest_papers(papers: List[Dict[str, Any]], collection_name: str = "research_papers") -> int:
     """
     Embed and store papers in ChromaDB.
-    Each paper dict: {title, abstract, authors, year, url, source, paper_id,
-                      citation_count, influential_citation_count, is_open_access, journal}
+    Each paper dict: {title, abstract, authors, year, url, source, paper_id}
     Returns number of new papers added.
     """
     collection = get_collection(collection_name)
@@ -67,17 +66,15 @@ def ingest_papers(papers: List[Dict[str, Any]], collection_name: str = "research
         texts.append(doc_text)
         ids.append(doc_id)
         metadatas.append({
-            "title":                      p.get("title", ""),
-            "authors":                    ", ".join(p.get("authors", [])),
-            "year":                       str(p.get("year", "")),
-            "url":                        p.get("url", ""),
-            "source":                     p.get("source", ""),
-            "paper_id":                   p.get("paper_id", ""),
-            # Credibility signals — stored as strings (ChromaDB metadata must be str/int/float/bool)
-            "citation_count":             int(p.get("citation_count") or 0),
-            "influential_citation_count": int(p.get("influential_citation_count") or 0),
-            "is_open_access":             bool(p.get("is_open_access", False)),
-            "journal":                    str(p.get("journal", "") or ""),
+            "title":                     p.get("title", ""),
+            "authors":                   ", ".join(p.get("authors", [])),
+            "year":                      str(p.get("year", "")),
+            "url":                       p.get("url", ""),
+            "source":                    p.get("source", ""),
+            "paper_id":                  p.get("paper_id", ""),
+            "citation_count":            str(p.get("citation_count", 0) or 0),
+            "influential_citation_count": str(p.get("influential_citation_count", 0) or 0),
+            "journal":                   p.get("journal", ""),
         })
 
     if not texts:
@@ -113,6 +110,25 @@ def similarity_search(
     ):
         output.append({**meta, "snippet": doc[:300], "similarity": round(1 - dist, 4)})
     return output
+
+
+def reset_collection(collection_name: str = "research_papers") -> None:
+    """
+    Delete and recreate the collection, clearing all previously ingested papers.
+    Called at the start of each pipeline run to prevent papers from a previous
+    topic (e.g. swarm robotics) from contaminating results for a new topic
+    (e.g. women in espionage history).
+    """
+    client = _get_client()
+    try:
+        client.delete_collection(name=collection_name)
+        logger.info("Cleared collection '%s' for fresh pipeline run.", collection_name)
+    except Exception:
+        pass  # collection may not exist yet on first run
+    client.get_or_create_collection(
+        name=collection_name,
+        metadata={"hnsw:space": "cosine"},
+    )
 
 
 def collection_stats(collection_name: str = "research_papers") -> Dict[str, Any]:

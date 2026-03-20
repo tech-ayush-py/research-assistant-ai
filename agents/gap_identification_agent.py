@@ -1,16 +1,13 @@
 """
-Gap Identification Agent
-Identifies under-explored research intersections via semantic clustering
-and graph-based citation analysis.
+Gap Identification Agent — v2 with Two-Layer Verification
 
-Gap Verification (two layers):
-  Layer 1 — Corpus counter-check: for each proposed gap, a targeted similarity
-  search is run. If the top result scores > COVERAGE_THRESHOLD, the gap is
-  flagged as "potentially covered" and the conflicting paper is cited.
+Layer 1: LLM proposes 5-7 gaps from top papers (as before).
+Layer 2a: Each gap is embedded and searched against the full corpus.
+          If similarity > 0.72 a conflicting paper is flagged.
+Layer 2b: A second adversarial LLM pass rates each gap high/medium/low
+          and refines the wording — naming conflicting papers where found.
 
-  Layer 2 — Adversarial LLM review: a second LLM call plays devil's advocate,
-  reviewing each gap against the counter-check evidence and assigning a
-  confidence rating (high / medium / low) with a verification note.
+Gaps are sorted high → medium → low so the most reliable appear first.
 """
 import json
 import logging
@@ -22,25 +19,15 @@ from core.vector_store import similarity_search, get_collection
 
 logger = logging.getLogger(__name__)
 
-# If the top paper matching a gap statement has similarity above this threshold,
-# there is likely existing work addressing that gap — flag it.
-_COVERAGE_THRESHOLD = 0.72
+_COVER_THRESHOLD = 0.72   # similarity above this → gap may already be covered
 
 
 class GapIdentificationAgent:
-    """
-    Finds research gaps by:
-    1. Clustering papers semantically and finding thin/empty cluster regions.
-    2. Analysing what problems are raised but not solved in abstracts.
-    3. Comparing sub-topic coverage via LLM reasoning.
-    4. Verifying each gap with a corpus counter-check + adversarial LLM review.
-    """
 
     name = "Gap Identification Agent"
     description = (
-        "Identifies under-explored research gaps using semantic clustering "
-        "and graph-based citation analysis on the ingested paper corpus, "
-        "then verifies each gap with a two-layer cross-check."
+        "Identifies research gaps via two-layer verification: "
+        "LLM proposal + corpus counter-check + adversarial LLM review."
     )
 
     def run(self, research_topic: str) -> Dict[str, Any]:
@@ -50,25 +37,27 @@ class GapIdentificationAgent:
         if not related:
             return {"agent": self.name, "error": "No papers found. Run Literature Mining first."}
 
-        # Layer 0 — propose gaps via LLM
-        raw_gaps = self._find_gaps_llm(research_topic, related)
+        # Layer 1 — initial gap proposal
+        raw_gaps = self._propose_gaps(research_topic, related)
 
-        # Layer 1 — corpus counter-check
-        counter_checked = self._corpus_counter_check(raw_gaps.get("gaps", []))
+        # Layer 2a — corpus counter-check (algorithmic, no LLM cost)
+        checked  = self._counter_check(raw_gaps["gaps"])
 
-        # Layer 2 — adversarial LLM verification
-        verified_gaps = self._adversarial_review(
-            research_topic, raw_gaps.get("gaps", []), counter_checked
-        )
+        # Layer 2b — adversarial LLM review
+        verified = self._adversarial_review(research_topic, checked)
 
-        novelty_score = self._compute_novelty_score(research_topic, related)
+        # Sort: high → medium → low
+        order = {"high": 0, "medium": 1, "low": 2}
+        verified.sort(key=lambda g: order.get(g.get("confidence", "medium"), 1))
+
+        novelty_score = self._compute_novelty_score(related)
 
         return {
             "agent":            self.name,
             "research_topic":   research_topic,
             "papers_analysed":  len(related),
-            "identified_gaps":  [g["gap"] for g in verified_gaps],
-            "verified_gaps":    verified_gaps,          # full objects with confidence + notes
+            "identified_gaps":  [g["refined_gap"] for g in verified],
+            "gap_details":      verified,          # full detail for UI
             "opportunity_areas": raw_gaps.get("opportunities", []),
             "gap_reasoning":    raw_gaps.get("reasoning", ""),
             "novelty_score":    novelty_score,
@@ -78,30 +67,27 @@ class GapIdentificationAgent:
             ],
         }
 
-    # ── Layer 0: Propose gaps ─────────────────────────────────
+    # ── Layer 1: LLM gap proposal ──────────────────────────────────────────────
 
-    def _find_gaps_llm(self, topic: str, papers: List[Dict]) -> Dict[str, Any]:
+    def _propose_gaps(self, topic: str, papers: List[Dict]) -> Dict[str, Any]:
         llm = get_llm(temperature=0.4)
         paper_summaries = "\n".join(
             f"- [{p['year']}] {p['title']}: {p['snippet'][:200]}"
             for p in papers[:15]
         )
-
-        prompt = f"""You are an expert academic researcher identifying knowledge gaps. Your analysis must be appropriate for the specific academic discipline of the research topic — do not assume a computational or technical framing unless the topic is explicitly technical.
+        prompt = f"""You are an expert academic researcher identifying knowledge gaps. Your analysis must suit the specific discipline — do not default to computational or ML framing unless the topic is explicitly technical.
 
 Research Topic: "{topic}"
 
-Here are the most relevant existing papers:
+Existing papers:
 {paper_summaries}
 
-Based on these papers, identify:
-1. RESEARCH GAPS: 5-7 specific, concrete areas that are under-explored or completely missing in the existing literature. Frame these in terms natural to the discipline (e.g. archival gaps, theoretical gaps, methodological gaps, geographic gaps, temporal gaps).
-2. OPPORTUNITY AREAS: 3-4 promising directions where new research could have high scholarly impact.
-3. REASONING: A concise paragraph explaining your gap analysis approach.
+Identify:
+1. RESEARCH GAPS: 5-7 specific gaps (archival, theoretical, methodological, geographic, temporal — as appropriate for the discipline).
+2. OPPORTUNITY AREAS: 3-4 high-impact directions.
+3. REASONING: A concise paragraph on your gap analysis approach.
 
-Be precise — each gap should be a specific claim about what is missing, not a vague observation.
-
-Respond in JSON with keys: gaps (list of strings), opportunities (list of strings), reasoning (string)"""
+Respond only in JSON with keys: gaps (list of strings), opportunities (list of strings), reasoning (string)"""
 
         try:
             from langchain_core.messages import HumanMessage
@@ -109,156 +95,114 @@ Respond in JSON with keys: gaps (list of strings), opportunities (list of string
             raw = re.sub(r"```(?:json)?|```", "", response.content).strip()
             return json.loads(raw)
         except Exception as exc:
-            logger.warning("[GapIdentification] LLM error: %s", exc)
-            return {
-                "gaps": ["LLM unavailable – configure API key"],
-                "opportunities": [],
-                "reasoning": str(exc),
-            }
+            logger.warning("[GapIdentification] Layer1 LLM error: %s", exc)
+            return {"gaps": ["LLM unavailable"], "opportunities": [], "reasoning": str(exc)}
 
-    # ── Layer 1: Corpus counter-check ────────────────────────
+    # ── Layer 2a: Corpus counter-check ────────────────────────────────────────
 
-    def _corpus_counter_check(self, gaps: List[str]) -> List[Dict[str, Any]]:
+    def _counter_check(self, gaps: List[str]) -> List[Dict]:
         """
-        For each proposed gap, search the corpus for papers that might already
-        address it. Returns a list of dicts with:
-          gap, coverage_score, top_conflicting_paper (title + similarity), is_covered
+        For each gap, embed and search the corpus.
+        If the top hit > _COVER_THRESHOLD, flag it as potentially covered.
         """
-        results = []
-        for gap in gaps:
-            hits = similarity_search(gap, n_results=3)
-            if not hits:
-                results.append({
-                    "gap":                    gap,
-                    "coverage_score":         0.0,
-                    "top_conflicting_paper":  None,
-                    "is_covered":             False,
-                })
-                continue
-
-            top = hits[0]
-            coverage = top["similarity"]
-            is_covered = coverage >= _COVERAGE_THRESHOLD
-
-            results.append({
-                "gap":            gap,
-                "coverage_score": round(coverage, 4),
-                "top_conflicting_paper": {
-                    "title":      top["title"],
-                    "year":       top["year"],
-                    "similarity": top["similarity"],
-                } if is_covered else None,
-                "is_covered": is_covered,
+        checked = []
+        for gap_text in gaps:
+            hits = similarity_search(gap_text, n_results=3)
+            conflict = None
+            is_covered = False
+            if hits and hits[0]["similarity"] >= _COVER_THRESHOLD:
+                is_covered = True
+                conflict = {
+                    "title":      hits[0]["title"],
+                    "year":       hits[0]["year"],
+                    "similarity": hits[0]["similarity"],
+                }
+            checked.append({
+                "original_gap": gap_text,
+                "is_covered":   is_covered,
+                "conflict":     conflict,
             })
+        return checked
 
-            logger.info(
-                "[GapVerification] Gap: '%s...' | Coverage: %.3f | Covered: %s",
-                gap[:60], coverage, is_covered
-            )
+    # ── Layer 2b: Adversarial LLM review ─────────────────────────────────────
 
-        return results
-
-    # ── Layer 2: Adversarial LLM review ──────────────────────
-
-    def _adversarial_review(
-        self,
-        topic: str,
-        gaps: List[str],
-        counter_check: List[Dict],
-    ) -> List[Dict[str, Any]]:
+    def _adversarial_review(self, topic: str, checked: List[Dict]) -> List[Dict]:
         """
-        Second LLM call that reviews each gap with devil's advocate framing.
-        Assigns confidence (high/medium/low) and a verification note per gap.
-        Returns list of verified gap objects.
+        Second LLM call at low temperature (0.2) to play devil's advocate.
+        Assigns confidence and sharpens each gap statement.
         """
         llm = get_llm(temperature=0.2)
 
-        # Build the evidence summary for each gap
-        evidence_lines = []
-        for item in counter_check:
-            if item["is_covered"] and item["top_conflicting_paper"]:
-                cp = item["top_conflicting_paper"]
-                evidence_lines.append(
-                    f'- Gap: "{item["gap"]}"\n'
-                    f'  ⚠️  Potential conflict: "{cp["title"]}" ({cp["year"]}) '
-                    f'— similarity {cp["similarity"]:.2f}'
+        gap_block = ""
+        for i, g in enumerate(checked, 1):
+            gap_block += f"\nGap {i}: {g['original_gap']}\n"
+            if g["is_covered"]:
+                gap_block += (
+                    f"  ⚠ Counter-evidence: '{g['conflict']['title']}' "
+                    f"({g['conflict']['year']}) has similarity {g['conflict']['similarity']:.2f} "
+                    f"to this gap statement — it may already address this.\n"
                 )
             else:
-                evidence_lines.append(
-                    f'- Gap: "{item["gap"]}"\n'
-                    f'  ✓  No strong conflicting paper found (coverage score: {item["coverage_score"]:.2f})'
-                )
+                gap_block += "  ✓ No strong counter-evidence found in corpus.\n"
 
-        evidence_block = "\n".join(evidence_lines)
+        prompt = f"""You are a rigorous academic peer reviewer evaluating proposed research gaps for the topic: "{topic}".
 
-        prompt = f"""You are a rigorous academic peer reviewer. Your job is to verify whether each proposed research gap is genuinely under-explored, or whether it is already addressed in existing literature.
+For each gap below, you are given whether a conflicting paper was found in the literature corpus.
 
-Research Topic: "{topic}"
+Play devil's advocate. For each gap assign:
+- confidence: "high" (genuinely novel, well-supported), "medium" (partially addressed but still worth pursuing with a narrower claim), or "low" (likely already covered, needs major revision)
+- verification_note: 1-2 sentences. If conflict found, name the paper and explain what it still leaves unaddressed. If no conflict, briefly justify the high confidence.
+- refined_gap: A sharpened version of the gap statement. For medium/low, narrow the claim. For high, keep or lightly polish the original.
 
-Proposed gaps and corpus evidence:
-{evidence_block}
+{gap_block}
 
-For each gap, provide:
-1. confidence: "high" (genuinely novel, no conflicting evidence), "medium" (partially addressed but still meaningful), or "low" (likely already covered — should be revised or dropped)
-2. verification_note: 1-2 sentences explaining your assessment. If coverage was detected, name the conflicting work and explain what it leaves unaddressed (if anything). Be honest — do not validate weak gaps just to be polite.
-3. refined_gap: A sharpened version of the gap statement that addresses any coverage concerns. If the gap is "high" confidence, keep it as-is. If "medium" or "low", reframe it to be more specific and defensible.
-
-Respond ONLY in JSON as a list of objects with keys: gap (original), confidence, verification_note, refined_gap.
-No markdown, no extra text."""
+Respond ONLY with a valid JSON array (no markdown fences), one object per gap:
+[
+  {{
+    "confidence": "high"|"medium"|"low",
+    "verification_note": "...",
+    "refined_gap": "..."
+  }},
+  ...
+]"""
 
         try:
             from langchain_core.messages import HumanMessage
             response = invoke_with_retry(llm, [HumanMessage(content=prompt)])
             raw = re.sub(r"```(?:json)?|```", "", response.content).strip()
             reviewed = json.loads(raw)
-
             # Merge with counter-check data
-            merged = []
-            for item in reviewed:
-                # Find matching counter-check entry
-                cc = next((c for c in counter_check if c["gap"] == item.get("gap", "")), {})
-                merged.append({
-                    "gap":                   item.get("refined_gap") or item.get("gap", ""),
-                    "original_gap":          item.get("gap", ""),
-                    "confidence":            item.get("confidence", "medium"),
-                    "verification_note":     item.get("verification_note", ""),
-                    "coverage_score":        cc.get("coverage_score", 0.0),
-                    "conflicting_paper":     cc.get("top_conflicting_paper"),
+            result = []
+            for i, r in enumerate(reviewed):
+                base = checked[i] if i < len(checked) else {}
+                result.append({
+                    "original_gap":     base.get("original_gap", ""),
+                    "refined_gap":      r.get("refined_gap", base.get("original_gap", "")),
+                    "confidence":       r.get("confidence", "medium"),
+                    "verification_note": r.get("verification_note", ""),
+                    "is_covered":       base.get("is_covered", False),
+                    "conflict":         base.get("conflict"),
                 })
-
-            # Sort: high confidence first, then medium, then low
-            order = {"high": 0, "medium": 1, "low": 2}
-            merged.sort(key=lambda x: order.get(x["confidence"], 1))
-            return merged
-
+            return result
         except Exception as exc:
-            logger.warning("[GapVerification] Adversarial review failed: %s", exc)
-            # Fallback: return gaps with counter-check data only, no LLM verification
+            logger.warning("[GapIdentification] Layer2 LLM error: %s", exc)
+            # Fallback: return checked gaps with neutral confidence
             return [
                 {
-                    "gap":               item["gap"],
-                    "original_gap":      item["gap"],
-                    "confidence":        "low" if item["is_covered"] else "medium",
-                    "verification_note": (
-                        f"Automatic check: conflicting paper found — '{item['top_conflicting_paper']['title']}'"
-                        if item["is_covered"] and item["top_conflicting_paper"]
-                        else "Automatic check: no direct conflict found in corpus."
-                    ),
-                    "coverage_score":    item["coverage_score"],
-                    "conflicting_paper": item.get("top_conflicting_paper"),
+                    "original_gap":     g["original_gap"],
+                    "refined_gap":      g["original_gap"],
+                    "confidence":       "medium",
+                    "verification_note": "Verification unavailable.",
+                    "is_covered":       g["is_covered"],
+                    "conflict":         g["conflict"],
                 }
-                for item in counter_check
+                for g in checked
             ]
 
-    # ── Novelty score ─────────────────────────────────────────
+    # ── Novelty score ──────────────────────────────────────────────────────────
 
-    def _compute_novelty_score(self, topic: str, papers: List[Dict]) -> float:
-        """
-        Novelty score: 1 - average_similarity of top-5 most similar papers.
-        Higher score = more novel / fewer existing works.
-        """
+    def _compute_novelty_score(self, papers: List[Dict]) -> float:
         if not papers:
             return 1.0
-        top5_sims = [p["similarity"] for p in papers[:5]]
-        avg_sim = sum(top5_sims) / len(top5_sims)
-        return round(1.0 - avg_sim, 3)
+        top5 = [p["similarity"] for p in papers[:5]]
+        return round(1.0 - sum(top5) / len(top5), 3)
