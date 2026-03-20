@@ -85,17 +85,6 @@ The system is deployed as an interactive web application using Streamlit and is 
 
 ---
 
-## Supported Grant Agencies
-
-| Agency | Sections Generated |
-|--------|-------------------|
-| NSF | Project Summary, Project Description, Broader Impacts, Intellectual Merit, Budget Justification, References |
-| NIH | Specific Aims, Background & Significance, Innovation, Approach, Personnel, Budget Narrative |
-| DARPA | Technical Approach, Innovation, Team Capabilities, Risk Mitigation, Milestones, Budget |
-| EU Horizon | Excellence, Impact, Implementation, Partners, Work Packages, Budget Breakdown |
-
----
-
 ## Project Structure
 
 ```
